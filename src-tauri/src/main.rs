@@ -2,6 +2,7 @@
 
 mod model;
 mod persistence;
+mod transfer;
 
 use model::{extract_tags, validate_note, Note, Store};
 use std::path::PathBuf;

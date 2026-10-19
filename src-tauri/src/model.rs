@@ -83,6 +83,24 @@ pub fn validate_note(note: &Note) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_store(store: &Store) -> Result<(), String> {
+    if store.schema_version != SCHEMA_VERSION {
+        return Err(format!(
+            "Unsupported store version {}.",
+            store.schema_version
+        ));
+    }
+
+    let mut ids = HashSet::new();
+    for note in &store.notes {
+        validate_note(note)?;
+        if !ids.insert(note.id.as_str()) {
+            return Err(format!("The store contains duplicate note id {}.", note.id));
+        }
+    }
+    Ok(())
+}
+
 pub fn extract_tags(source: &str) -> Vec<String> {
     let mut tags = Vec::new();
     let mut seen = HashSet::new();
@@ -125,5 +143,23 @@ mod tests {
         let mut note = Store::seed(100).notes.remove(0);
         note.title = "x".repeat(MAX_TITLE_BYTES + 1);
         assert!(validate_note(&note).is_err());
+    }
+
+    #[test]
+    fn validate_store_rejects_wrong_schema() {
+        let mut store = Store::seed(100);
+        store.schema_version = SCHEMA_VERSION + 1;
+
+        let error = validate_store(&store).expect_err("wrong schemas must fail");
+        assert!(error.contains("Unsupported store version"));
+    }
+
+    #[test]
+    fn validate_store_rejects_duplicate_ids() {
+        let mut store = Store::seed(100);
+        store.notes[1].id = store.notes[0].id.clone();
+
+        let error = validate_store(&store).expect_err("duplicate IDs must fail");
+        assert!(error.contains("duplicate note id"));
     }
 }
