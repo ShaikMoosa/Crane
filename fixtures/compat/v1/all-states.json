@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "notes": [
+    {
+      "id": "legacy-active",
+      "title": "Pinned résumé",
+      "body": "Ideas in Ελληνικά and 日本語. #work/notes #résumé",
+      "tags": ["work/notes", "résumé"],
+      "createdAt": 0,
+      "updatedAt": 0,
+      "pinned": true,
+      "archived": false,
+      "trashed": false
+    },
+    {
+      "id": "legacy-archive",
+      "title": "Archived note",
+      "body": "Old material #archive/reference",
+      "tags": ["archive/reference"],
+      "createdAt": 100,
+      "updatedAt": 200,
+      "pinned": false,
+      "archived": true,
+      "trashed": false
+    },
+    {
+      "id": "legacy-trash",
+      "title": "Discarded note",
+      "body": "Recoverable content #later",
+      "tags": ["later"],
+      "createdAt": 300,
+      "updatedAt": 400,
+      "pinned": false,
+      "archived": false,
+      "trashed": true
+    }
+  ]
+}

@@ -401,12 +401,21 @@ dependencies = [
 name = "crane"
 version = "0.1.0"
 dependencies = [
+ "crane-domain",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "crane-domain"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

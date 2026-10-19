@@ -55,6 +55,7 @@ pub fn parse_markdown(
         pinned: false,
         archived: false,
         trashed: false,
+        extensions: Default::default(),
     };
     validate_note(&note)
         .map_err(|error| TransferError::markdown(format!("Could not import {name}: {error}")))?;
@@ -402,6 +403,7 @@ mod tests {
             pinned: false,
             archived: false,
             trashed: false,
+            extensions: Default::default(),
         }
     }
 
@@ -475,6 +477,7 @@ mod tests {
         let store = Store {
             schema_version: 1,
             notes: vec![active, archived, trashed],
+            extensions: Default::default(),
         };
 
         let manifest = build_export_manifest(&store).expect("manifest should build");
@@ -504,6 +507,7 @@ mod tests {
         let store = Store {
             schema_version: 1,
             notes: vec![first, second, third, fourth, fifth, sixth, seventh],
+            extensions: Default::default(),
         };
 
         let manifest = build_export_manifest(&store).expect("manifest should build");

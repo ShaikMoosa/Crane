@@ -179,6 +179,7 @@ fn create_note(state: State<'_, AppState>) -> Result<Note, String> {
             pinned: false,
             archived: false,
             trashed: false,
+            extensions: Default::default(),
         };
         store.notes.push(note.clone());
         Ok(note)

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "notes": [
+    {
+      "id": "legacy-active",
+      "title": "Extended note",
+      "body": "Unknown fields must survive. #compat/v1",
+      "tags": ["compat/v1"],
+      "createdAt": 0,
+      "updatedAt": 0,
+      "pinned": false,
+      "archived": false,
+      "trashed": false,
+      "futureNote": {
+        "color": "amber",
+        "rank": 7
+      }
+    }
+  ],
+  "futureStore": {
+    "source": "synthetic",
+    "enabled": true
+  }
+}

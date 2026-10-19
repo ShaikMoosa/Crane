@@ -1,5 +1,9 @@
 /src-tauri/target/
 /src-tauri/gen/
+/.superpowers/
+/target/
+/artifacts/
+/native-test-output/
 /.impeccable/review/
 *.tmp
 .DS_Store
