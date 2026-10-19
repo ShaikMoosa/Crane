@@ -21,7 +21,10 @@ export function createTransferController({
       if (success) notify(typeof success === "function" ? success(outcome.data) : success, "success");
       return outcome;
     } catch (error) {
-      notify(error?.message || "The transfer could not be completed.", "error");
+      const message = typeof error === "string"
+        ? error
+        : error?.message || "The transfer could not be completed.";
+      notify(message, "error");
       return { status: "error", data: null, error };
     } finally {
       busy = false;

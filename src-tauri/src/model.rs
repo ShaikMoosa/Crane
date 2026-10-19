@@ -4,6 +4,7 @@ use std::collections::HashSet;
 pub const SCHEMA_VERSION: u32 = 1;
 pub const MAX_TITLE_BYTES: usize = 500;
 pub const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_RENDERABLE_TIMESTAMP: u64 = 8_640_000_000_000_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +80,9 @@ pub fn validate_note(note: &Note) -> Result<(), String> {
     }
     if note.body.len() > MAX_BODY_BYTES {
         return Err("The note is larger than the 2 MB limit.".into());
+    }
+    if note.created_at > MAX_RENDERABLE_TIMESTAMP || note.updated_at > MAX_RENDERABLE_TIMESTAMP {
+        return Err("A note timestamp is outside the supported date range.".into());
     }
     Ok(())
 }
@@ -161,5 +165,14 @@ mod tests {
 
         let error = validate_store(&store).expect_err("duplicate IDs must fail");
         assert!(error.contains("duplicate note id"));
+    }
+
+    #[test]
+    fn validate_store_rejects_timestamps_javascript_cannot_render() {
+        let mut store = Store::seed(100);
+        store.notes[0].updated_at = 8_640_000_000_000_001;
+
+        let error = validate_store(&store).expect_err("out-of-range dates must fail");
+        assert!(error.contains("timestamp"));
     }
 }

@@ -5,6 +5,7 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 const html = await readFile(new URL("ui/index.html", root), "utf8");
 const css = await readFile(new URL("ui/styles.css", root), "utf8");
+const app = await readFile(new URL("ui/app.js", root), "utf8");
 
 test("Data menu lives in the library footer and uses real buttons", () => {
   const footer = html.match(/<div class="library-footer">([\s\S]*?)<\/div>\s*<\/aside>/)?.[1] || "";
@@ -35,4 +36,13 @@ test("restore confirmation is a labelled semantic dialog", () => {
 test("compact transfer controls preserve 44 pixel targets", () => {
   const compact = css.match(/@media \(max-width: 680px\) \{([\s\S]*?)\n\}/)?.[1] || "";
   assert.match(compact, /(?:\.data-menu button|\.data-menu-button)[^{]*\{[^}]*min-height:\s*44px/);
+});
+
+test("busy transfers block note mutations until their store snapshot completes", () => {
+  assert.match(app, /ui\.shell\.inert\s*=\s*transfers\.busy/);
+});
+
+test("restore replacement cannot be dismissed after commit starts", () => {
+  assert.match(app, /ui\.cancelRestore\.disabled\s*=\s*transfers\.busy/);
+  assert.match(app, /restoreDialog\.addEventListener\("cancel",[\s\S]*?if \(transfers\.busy\) event\.preventDefault\(\)/);
 });

@@ -189,6 +189,8 @@ function syncTransferControls() {
     button.disabled = transfers.busy || (button === ui.exportNote && !currentNote());
   });
   ui.dataMenuButton.disabled = transfers.busy;
+  ui.cancelRestore.disabled = transfers.busy;
+  ui.shell.inert = transfers.busy;
   ui.shell.setAttribute("aria-busy", String(transfers.busy));
 }
 
@@ -217,6 +219,7 @@ function showRestoreDialog(inspection) {
 }
 
 function scheduleSave() {
+  if (transfers.busy) return;
   const note = currentNote();
   if (!note) return;
   note.title = ui.title.value;
@@ -233,6 +236,7 @@ function scheduleSave() {
 }
 
 async function selectNote(id) {
+  if (transfers.busy) return;
   if (!(await flushSave())) return;
   state.selectedId = id;
   state.preview = false;
@@ -242,6 +246,7 @@ async function selectNote(id) {
 }
 
 async function createNote() {
+  if (transfers.busy) return;
   if (!(await flushSave())) return;
   try {
     const note = await bridge.createNote();
@@ -255,6 +260,7 @@ async function createNote() {
 }
 
 async function changeState(field, value) {
+  if (transfers.busy) return;
   const note = currentNote();
   if (!note) return;
   if (!(await flushSave())) return;
@@ -301,6 +307,9 @@ ui.confirmRestore.addEventListener("click", async () => {
   const outcome = await runTransfer(() => transfers.restoreBackup(token));
   if (outcome?.status !== "ignored") ui.restoreDialog.close(outcome?.status || "error");
 });
+ui.restoreDialog.addEventListener("cancel", (event) => {
+  if (transfers.busy) event.preventDefault();
+});
 ui.restoreDialog.addEventListener("close", () => {
   state.restoreToken = null;
   restoreInvoker?.focus();
@@ -318,6 +327,7 @@ document.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (ui.restoreDialog.open) return;
+  if (transfers.busy) return;
   if (event.ctrlKey && event.key.toLowerCase() === "n") { event.preventDefault(); createNote(); }
   if (event.ctrlKey && event.key.toLowerCase() === "f") { event.preventDefault(); ui.search.focus(); }
   if (event.key === "Escape") { closeActionMenu(); closeDataMenu(); setMobilePane("list"); }

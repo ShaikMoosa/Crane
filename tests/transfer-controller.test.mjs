@@ -126,6 +126,21 @@ test("errors_unlock_controls", async () => {
   assert.deepEqual(events.at(-1), ["notify", "disk unavailable", "error"]);
 });
 
+test("native string errors stay visible to the user", async () => {
+  const { controller, events } = setup({
+    bridge: {
+      inspectBackup: async () => {
+        throw "Unsupported backup version 9.";
+      },
+    },
+  });
+
+  const outcome = await controller.inspectBackup();
+
+  assert.equal(outcome.status, "error");
+  assert.deepEqual(events.at(-1), ["notify", "Unsupported backup version 9.", "error"]);
+});
+
 test("duplicate_activation_while_busy_is_ignored", async () => {
   let release;
   let calls = 0;

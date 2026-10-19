@@ -6,13 +6,14 @@ mod transfer;
 
 use model::{extract_tags, validate_note, validate_store, Note, Store};
 use serde::Serialize;
-use std::fs;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_dialog::{DialogExt, FilePath};
+use tauri_plugin_dialog::{DialogExt, FilePath, MessageDialogButtons};
 use transfer::backup::{self, PendingRestore};
 use transfer::markdown::{self, ExportSummary, NamedBytes};
 use transfer::TransferError;
@@ -104,6 +105,19 @@ fn new_id() -> String {
 fn selected_path(path: FilePath) -> Result<PathBuf, String> {
     path.into_path()
         .map_err(|error| format!("The selected item is not a local file: {error}"))
+}
+
+fn read_file_limited(path: &Path, byte_limit: usize, too_large: &str) -> Result<Vec<u8>, String> {
+    let file =
+        File::open(path).map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    let mut bytes = Vec::with_capacity(byte_limit.min(64 * 1024));
+    file.take(byte_limit.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not read {}: {error}", path.display()))?;
+    if bytes.len() > byte_limit {
+        return Err(too_large.to_string());
+    }
+    Ok(bytes)
 }
 
 fn format_export_timestamp(timestamp_millis: u64) -> String {
@@ -237,6 +251,7 @@ async fn import_markdown(
     let timestamp = now_millis();
     let ids: Vec<_> = (0..paths.len()).map(|_| new_id()).collect();
     let prepared = tauri::async_runtime::spawn_blocking(move || {
+        let mut remaining = markdown::MAX_BATCH_BYTES;
         let files = paths
             .into_iter()
             .map(|path| {
@@ -247,8 +262,12 @@ async fn import_markdown(
                         "A selected Markdown filename is not valid Unicode.".to_string()
                     })?
                     .to_string();
-                let bytes =
-                    fs::read(&path).map_err(|error| format!("Could not read {name}: {error}"))?;
+                let bytes = read_file_limited(
+                    &path,
+                    remaining,
+                    "The selected Markdown files are larger than the 64 MB batch limit.",
+                )?;
+                remaining = remaining.saturating_sub(bytes.len());
                 Ok(NamedBytes { name, bytes })
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -369,7 +388,26 @@ async fn create_backup(
     else {
         return Ok(TransferOutcome::cancelled());
     };
-    let path = ensure_suffix(selected_path(selection)?, ".crane-backup.json");
+    let selected = selected_path(selection)?;
+    let path = ensure_backup_suffix(selected.clone());
+    if backup_overwrite_requires_confirmation(&selected, &path)
+        && !app
+            .dialog()
+            .message(format!(
+                "A file named {} already exists. Replace it?",
+                path.file_name()
+                    .map(|name| name.to_string_lossy())
+                    .unwrap_or_default()
+            ))
+            .title("Replace existing backup?")
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "Replace".into(),
+                "Cancel".into(),
+            ))
+            .blocking_show()
+    {
+        return Ok(TransferOutcome::cancelled());
+    }
     let note_count = snapshot.notes.len();
     tauri::async_runtime::spawn_blocking(move || {
         let envelope = backup::make_envelope(&snapshot, created_at, env!("CARGO_PKG_VERSION"))?;
@@ -404,8 +442,12 @@ async fn inspect_backup(
     let token = format!("restore-{}", new_id());
     let token_for_task = token.clone();
     let pending = tauri::async_runtime::spawn_blocking(move || {
-        let bytes = fs::read(path)
-            .map_err(|error| TransferError::Io(format!("Could not read the backup: {error}")))?;
+        let bytes = read_file_limited(
+            &path,
+            backup::MAX_BACKUP_BYTES,
+            "The backup is larger than the 256 MB limit.",
+        )
+        .map_err(TransferError::Io)?;
         backup::inspect_backup(&bytes, token_for_task)
     })
     .await
@@ -487,6 +529,32 @@ fn ensure_suffix(path: PathBuf, suffix: &str) -> PathBuf {
     let mut value = path.into_os_string();
     value.push(suffix);
     PathBuf::from(value)
+}
+
+fn ensure_backup_suffix(path: PathBuf) -> PathBuf {
+    const SUFFIX: &str = ".crane-backup.json";
+    if path
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .ends_with(SUFFIX)
+    {
+        return path;
+    }
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    {
+        let mut without_json = path;
+        without_json.set_extension("");
+        let mut value = without_json.into_os_string();
+        value.push(SUFFIX);
+        return PathBuf::from(value);
+    }
+    ensure_suffix(path, SUFFIX)
+}
+
+fn backup_overwrite_requires_confirmation(selected: &Path, destination: &Path) -> bool {
+    selected != destination && destination.exists()
 }
 
 fn main() {
@@ -581,5 +649,49 @@ mod main_tests {
             format_export_timestamp(1_760_870_400_000),
             "2025-10-19 104000"
         );
+    }
+
+    #[test]
+    fn bounded_reader_rejects_before_retaining_bytes_past_the_limit() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the system clock should be after the Unix epoch")
+            .as_nanos();
+        let path = std::env::current_dir()
+            .expect("the test should have a working directory")
+            .join("target")
+            .join(format!("crane-read-test-{}-{nonce}", std::process::id()));
+        std::fs::write(&path, b"12345").expect("fixture should be written");
+
+        let error = read_file_limited(&path, 4, "The selected file is too large.")
+            .expect_err("the fifth byte must trip the four-byte limit");
+
+        assert_eq!(error, "The selected file is too large.");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn normalized_backup_targets_that_exist_require_confirmation() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the system clock should be after the Unix epoch")
+            .as_nanos();
+        let folder = std::env::current_dir()
+            .expect("the test should have a working directory")
+            .join("target")
+            .join(format!(
+                "crane-overwrite-test-{}-{nonce}",
+                std::process::id()
+            ));
+        std::fs::create_dir_all(&folder).expect("fixture folder should exist");
+        let selected = folder.join("daily.json");
+        let normalized = ensure_backup_suffix(selected.clone());
+        std::fs::write(&normalized, b"existing").expect("normalized target should exist");
+
+        assert!(backup_overwrite_requires_confirmation(
+            &selected,
+            &normalized
+        ));
+        let _ = std::fs::remove_dir_all(folder);
     }
 }

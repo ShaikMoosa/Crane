@@ -1,12 +1,12 @@
 use super::TransferError;
-use crate::model::{validate_store, Store, SCHEMA_VERSION};
+use crate::model::{validate_store, Store, MAX_RENDERABLE_TIMESTAMP, SCHEMA_VERSION};
 use crate::persistence::write_atomic_bytes;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const BACKUP_FORMAT: &str = "crane-backup";
 const BACKUP_VERSION: u32 = 1;
-const MAX_BACKUP_BYTES: usize = 256 * 1024 * 1024;
+pub(crate) const MAX_BACKUP_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +49,7 @@ pub fn make_envelope(
     app_version: &str,
 ) -> Result<BackupEnvelope, TransferError> {
     validate_store(store).map_err(TransferError::Validation)?;
+    validate_backup_timestamp(created_at)?;
     Ok(BackupEnvelope {
         format: BACKUP_FORMAT.into(),
         backup_version: BACKUP_VERSION,
@@ -59,8 +60,19 @@ pub fn make_envelope(
 }
 
 fn serialize_envelope(envelope: &BackupEnvelope) -> Result<Vec<u8>, TransferError> {
-    serde_json::to_vec_pretty(envelope)
-        .map_err(|error| TransferError::Json(format!("Could not serialize the backup: {error}")))
+    serialize_envelope_with_limit(envelope, MAX_BACKUP_BYTES)
+}
+
+fn serialize_envelope_with_limit(
+    envelope: &BackupEnvelope,
+    byte_limit: usize,
+) -> Result<Vec<u8>, TransferError> {
+    let bytes = serde_json::to_vec_pretty(envelope)
+        .map_err(|error| TransferError::Json(format!("Could not serialize the backup: {error}")))?;
+    if bytes.len() > byte_limit {
+        return Err(TransferError::BackupSize);
+    }
+    Ok(bytes)
 }
 
 pub fn inspect_backup(bytes: &[u8], token: String) -> Result<PendingRestore, TransferError> {
@@ -86,6 +98,7 @@ fn inspect_backup_with_limit(
     if envelope.store.schema_version != SCHEMA_VERSION {
         return Err(TransferError::StoreVersion(envelope.store.schema_version));
     }
+    validate_backup_timestamp(envelope.created_at)?;
     validate_store(&envelope.store).map_err(TransferError::Validation)?;
 
     let inspection = BackupInspection {
@@ -115,6 +128,15 @@ fn inspect_backup_with_limit(
         inspection,
         replacement: envelope.store,
     })
+}
+
+fn validate_backup_timestamp(created_at: u64) -> Result<(), TransferError> {
+    if created_at > MAX_RENDERABLE_TIMESTAMP {
+        return Err(TransferError::Validation(
+            "The backup timestamp is outside the supported date range.".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub fn restore_transaction(
@@ -250,6 +272,35 @@ mod tests {
         let error = inspect_backup_with_limit(b"not JSON", "token".into(), 4)
             .expect_err("size must be checked before JSON parsing");
         assert!(matches!(error, TransferError::BackupSize));
+    }
+
+    #[test]
+    fn refuses_to_create_a_backup_larger_than_the_restore_limit() {
+        let envelope =
+            make_envelope(&Store::seed(10), 20, "0.1.0").expect("fixture should validate");
+        let encoded = serialize_envelope(&envelope).expect("fixture should serialize");
+
+        let error = serialize_envelope_with_limit(&envelope, encoded.len() - 1)
+            .expect_err("an unrestorable output must be rejected");
+
+        assert!(matches!(error, TransferError::BackupSize));
+    }
+
+    #[test]
+    fn rejects_an_unrenderable_backup_envelope_timestamp() {
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "format": "crane-backup",
+            "backupVersion": 1,
+            "createdAt": 8_640_000_000_000_001_u64,
+            "appVersion": "0.1.0",
+            "store": Store::seed(10)
+        }))
+        .expect("fixture should serialize");
+
+        let error = inspect_backup(&bytes, "token".into())
+            .expect_err("an unrenderable backup date must fail before confirmation");
+
+        assert!(matches!(error, TransferError::Validation(_)));
     }
 
     #[test]

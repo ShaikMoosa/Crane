@@ -2,12 +2,12 @@ use super::TransferError;
 use crate::model::{extract_tags, validate_note, Note, Store};
 use serde::Serialize;
 use std::collections::HashSet;
-use std::fs::{self, File};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAX_BATCH_BYTES: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_BATCH_BYTES: usize = 64 * 1024 * 1024;
 const MAX_FILENAME_CHARS: usize = 120;
 
 #[derive(Clone, Debug)]
@@ -160,7 +160,7 @@ struct FsEntryWriter;
 
 impl EntryWriter for FsEntryWriter {
     fn write(&mut self, path: &Path, contents: &[u8]) -> io::Result<()> {
-        let mut file = File::create(path)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
         file.write_all(contents)?;
         file.sync_all()
     }
@@ -342,7 +342,7 @@ fn unique_filename_stem(title: &str, used: &mut HashSet<String>) -> String {
     let base = sanitize_filename_stem(title);
     let mut candidate = base.clone();
     let mut suffix = 2usize;
-    while !used.insert(candidate.to_lowercase()) {
+    while !used.insert(candidate.to_uppercase()) {
         let suffix_text = format!(" {suffix}");
         let available = MAX_FILENAME_CHARS.saturating_sub(suffix_text.chars().count());
         let prefix: String = base.chars().take(available).collect();
@@ -378,7 +378,10 @@ fn is_windows_reserved_name(stem: &str) -> bool {
             .strip_prefix("COM")
             .or_else(|| base.strip_prefix("LPT"))
             .is_some_and(|number| {
-                matches!(number, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+                matches!(
+                    number,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
             })
 }
 
@@ -494,10 +497,13 @@ mod tests {
         let second = note("two", "Plan", "Upper");
         let third = note("three", "plan", "Lower");
         let fourth = note("four", &"é".repeat(160), "Long");
+        let fifth = note("five", "Σ", "Upper sigma");
+        let sixth = note("six", "ς", "Final sigma");
+        let seventh = note("seven", "COM¹", "Reserved superscript");
         first.archived = true;
         let store = Store {
             schema_version: 1,
-            notes: vec![first, second, third, fourth],
+            notes: vec![first, second, third, fourth, fifth, sixth, seventh],
         };
 
         let manifest = build_export_manifest(&store).expect("manifest should build");
@@ -518,6 +524,44 @@ mod tests {
         assert_eq!(stems[1], "Plan");
         assert_eq!(stems[2], "plan 2");
         assert!(stems[3].chars().count() <= MAX_FILENAME_CHARS);
+        assert_eq!(stems[4], "Σ");
+        assert_eq!(stems[5], "ς 2");
+        assert_eq!(stems[6], "Untitled note");
+    }
+
+    #[test]
+    fn duplicate_manifest_paths_abort_instead_of_overwriting_an_export() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the system clock should be after the Unix epoch")
+            .as_nanos();
+        let destination = std::env::current_dir()
+            .expect("the test should have a working directory")
+            .join("target")
+            .join(format!(
+                "crane-collision-test-{}-{nonce}",
+                std::process::id()
+            ));
+        std::fs::create_dir_all(&destination).expect("test destination should exist");
+        let manifest = ExportManifest {
+            entries: vec![
+                ExportEntry {
+                    relative_path: PathBuf::from("Notes/Same.md"),
+                    contents: b"first".to_vec(),
+                },
+                ExportEntry {
+                    relative_path: PathBuf::from("Notes/Same.md"),
+                    contents: b"second".to_vec(),
+                },
+            ],
+        };
+
+        let error = write_library_export(&destination, &manifest, "Crane Export collision")
+            .expect_err("duplicate destinations must abort publication");
+
+        assert!(error.to_string().contains("Could not write"));
+        assert!(!destination.join("Crane Export collision").exists());
+        let _ = std::fs::remove_dir_all(destination);
     }
 
     #[test]
