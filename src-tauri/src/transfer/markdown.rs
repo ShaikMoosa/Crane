@@ -1,6 +1,6 @@
+use super::TransferError;
 use crate::model::{extract_tags, validate_note, Note, Store};
 use std::collections::HashSet;
-use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -32,23 +32,6 @@ pub struct ExportSummary {
     pub folder_name: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TransferError(String);
-
-impl TransferError {
-    fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
-    }
-}
-
-impl fmt::Display for TransferError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for TransferError {}
-
 pub fn parse_markdown(
     name: &str,
     bytes: &[u8],
@@ -57,7 +40,7 @@ pub fn parse_markdown(
 ) -> Result<Note, TransferError> {
     ensure_markdown_extension(name)?;
     let source = std::str::from_utf8(bytes)
-        .map_err(|_| TransferError::new(format!("{name} is not valid UTF-8 Markdown.")))?;
+        .map_err(|_| TransferError::markdown(format!("{name} is not valid UTF-8 Markdown.")))?;
     let (heading, body) = split_title_heading(source);
     let title = heading.unwrap_or_else(|| filename_title(name));
     let note = Note {
@@ -72,7 +55,7 @@ pub fn parse_markdown(
         trashed: false,
     };
     validate_note(&note)
-        .map_err(|error| TransferError::new(format!("Could not import {name}: {error}")))?;
+        .map_err(|error| TransferError::markdown(format!("Could not import {name}: {error}")))?;
     Ok(note)
 }
 
@@ -92,10 +75,10 @@ pub fn prepare_import(
 ) -> Result<Vec<Note>, TransferError> {
     let total = files.iter().try_fold(0usize, |sum, file| {
         sum.checked_add(file.bytes.len())
-            .ok_or_else(|| TransferError::new("The selected Markdown batch exceeds 64 MB."))
+            .ok_or_else(|| TransferError::markdown("The selected Markdown batch exceeds 64 MB."))
     })?;
     if total > MAX_BATCH_BYTES {
-        return Err(TransferError::new(
+        return Err(TransferError::markdown(
             "The selected Markdown batch exceeds the 64 MB limit.",
         ));
     }
@@ -104,7 +87,7 @@ pub fn prepare_import(
         .into_iter()
         .map(|file| {
             let id = ids.next().ok_or_else(|| {
-                TransferError::new("Crane could not assign an ID to every imported note.")
+                TransferError::markdown("Crane could not assign an ID to every imported note.")
             })?;
             parse_markdown(&file.name, &file.bytes, timestamp, id)
         })
@@ -118,7 +101,7 @@ pub fn build_export_manifest(store: &Store) -> Result<ExportManifest, TransferEr
 
     for note in store.notes.iter().filter(|note| !note.trashed) {
         validate_note(note).map_err(|error| {
-            TransferError::new(format!("Could not export note {}: {error}", note.id))
+            TransferError::markdown(format!("Could not export note {}: {error}", note.id))
         })?;
         let (folder, used) = if note.archived {
             ("Archive", &mut used_archive)
@@ -138,9 +121,9 @@ pub fn build_export_manifest(store: &Store) -> Result<ExportManifest, TransferEr
 pub fn write_note_export(path: &Path, note: &Note) -> Result<(), TransferError> {
     let parent = path
         .parent()
-        .ok_or_else(|| TransferError::new("The export path has no parent folder."))?;
+        .ok_or_else(|| TransferError::markdown("The export path has no parent folder."))?;
     fs::create_dir_all(parent).map_err(|error| {
-        TransferError::new(format!("Could not create the export folder: {error}"))
+        TransferError::markdown(format!("Could not create the export folder: {error}"))
     })?;
     let temporary = unique_temporary_path(parent, ".crane-note-export", "tmp");
     let result = (|| {
@@ -150,7 +133,9 @@ pub fn write_note_export(path: &Path, note: &Note) -> Result<(), TransferError> 
     if result.is_err() {
         let _ = fs::remove_file(&temporary);
     }
-    result.map_err(|error| TransferError::new(format!("Could not write the note export: {error}")))
+    result.map_err(|error| {
+        TransferError::markdown(format!("Could not write the note export: {error}"))
+    })
 }
 
 pub fn write_library_export(
@@ -182,11 +167,11 @@ fn write_library_export_with(
     writer: &mut impl EntryWriter,
 ) -> Result<ExportSummary, TransferError> {
     fs::create_dir_all(destination).map_err(|error| {
-        TransferError::new(format!("Could not open the export destination: {error}"))
+        TransferError::markdown(format!("Could not open the export destination: {error}"))
     })?;
     let final_path = destination.join(folder_name);
     if final_path.exists() {
-        return Err(TransferError::new(format!(
+        return Err(TransferError::markdown(format!(
             "An export named {folder_name} already exists."
         )));
     }
@@ -195,18 +180,18 @@ fn write_library_export_with(
         for entry in &manifest.entries {
             ensure_safe_relative_path(&entry.relative_path)?;
             let path = temporary.join(&entry.relative_path);
-            let parent = path
-                .parent()
-                .ok_or_else(|| TransferError::new("An export entry has no parent directory."))?;
+            let parent = path.parent().ok_or_else(|| {
+                TransferError::markdown("An export entry has no parent directory.")
+            })?;
             fs::create_dir_all(parent).map_err(|error| {
-                TransferError::new(format!("Could not create an export folder: {error}"))
+                TransferError::markdown(format!("Could not create an export folder: {error}"))
             })?;
             writer.write(&path, &entry.contents).map_err(|error| {
-                TransferError::new(format!("Could not write an exported note: {error}"))
+                TransferError::markdown(format!("Could not write an exported note: {error}"))
             })?;
         }
         fs::rename(&temporary, &final_path).map_err(|error| {
-            TransferError::new(format!("Could not publish the library export: {error}"))
+            TransferError::markdown(format!("Could not publish the library export: {error}"))
         })?;
         Ok(ExportSummary {
             exported_count: manifest.entries.len(),
@@ -226,7 +211,9 @@ fn ensure_safe_relative_path(path: &Path) -> Result<(), TransferError> {
             .components()
             .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
-        return Err(TransferError::new("An export entry has an unsafe path."));
+        return Err(TransferError::markdown(
+            "An export entry has an unsafe path.",
+        ));
     }
     Ok(())
 }
@@ -242,13 +229,13 @@ fn create_temporary_directory(destination: &Path) -> Result<PathBuf, TransferErr
             Ok(()) => return Ok(path),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(TransferError::new(format!(
+                return Err(TransferError::markdown(format!(
                     "Could not create a temporary export folder: {error}"
                 )))
             }
         }
     }
-    Err(TransferError::new(
+    Err(TransferError::markdown(
         "Could not reserve a temporary export folder.",
     ))
 }
@@ -301,7 +288,7 @@ fn ensure_markdown_extension(name: &str) -> Result<(), TransferError> {
     if is_markdown {
         Ok(())
     } else {
-        Err(TransferError::new(format!(
+        Err(TransferError::markdown(format!(
             "{name} is not a Markdown (.md) file."
         )))
     }

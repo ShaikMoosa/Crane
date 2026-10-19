@@ -23,17 +23,21 @@ pub fn load_or_seed(path: &Path, timestamp: u64) -> Result<Store, String> {
 }
 
 pub fn save(path: &Path, store: &Store) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(store)
+        .map_err(|error| format!("Could not serialize notes: {error}"))?;
+    write_atomic_bytes(path, &bytes)
+}
+
+pub(crate) fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "The data path has no parent directory.".to_string())?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("Could not create the data directory: {error}"))?;
-    let temporary = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec_pretty(store)
-        .map_err(|error| format!("Could not serialize notes: {error}"))?;
+    let temporary = path.with_extension("tmp");
     let mut file = File::create(&temporary)
         .map_err(|error| format!("Could not create a temporary store: {error}"))?;
-    file.write_all(&bytes)
+    file.write_all(bytes)
         .map_err(|error| format!("Could not write notes: {error}"))?;
     file.sync_all()
         .map_err(|error| format!("Could not flush notes to disk: {error}"))?;
