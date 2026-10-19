@@ -2,7 +2,11 @@
 
 ## Product and stack
 
-Read `PRODUCT.md` before product decisions and `DESIGN.md` before interface changes. This is a local-first Rust + Tauri v2 application with a static `ui/` frontend. Runtime code must not require Node.js, remote scripts, fonts, or services.
+Read `PRODUCT.md` before product decisions and `DESIGN.md` before interface changes. Crane is a local-first Markdown notebook. The user has selected the `saas` skill as the governing stack for future development: pure Rust, egui/eframe for the native interface, and wgpu for rendering.
+
+The current released implementation is still Rust + Tauri v2 with a static `ui/` frontend. Treat those files and their tests as the migration baseline; the native migration design and implementation plan must be reviewed before replacing them. Use `tauri-vanillajs-desktop` only to inspect or maintain the legacy implementation where necessary, not to choose the target architecture.
+
+New native application code must not introduce Tauri, Electron, a webview, JavaScript/TypeScript UI code, a Node.js runtime/build dependency, remote scripts, remote fonts, or required services. Preserve the offline workflow; accounts, billing, sync, collaboration, and agent automation require separate product scope.
 
 ## Superpowers workflow
 
@@ -20,15 +24,18 @@ Do not require subagents or worktrees when the current harness, user request, or
 
 ## Engineering rules
 
-- Keep DOM and interaction concerns in `ui/`; keep persistence and privileged operations in Rust.
-- Treat IPC arguments as untrusted. Expose domain operations, never arbitrary filesystem or shell primitives.
+- During migration, keep existing DOM code in the legacy `ui/` directory. Put the new native interface in an egui/eframe desktop shell; keep domain/application contracts independent of UI, operating-system, network, identity-provider, and billing-provider dependencies.
+- Expose typed domain operations, never arbitrary filesystem or shell primitives. Validate commands, imported content, selected paths, sizes, and destructive confirmations at their boundaries.
 - Persist through a temporary sibling file followed by rename. A failed save must be visible to the UI.
 - Keep the persisted schema versioned and tolerate future unknown fields where practical.
-- Keep frontend modules focused and test domain transformations without the DOM.
+- Preserve existing note IDs, bodies, timestamps, states, tags, and version-1 JSON/backup compatibility. Validate migration and rollback with isolated fixtures before using a real library.
+- Keep modules focused; test domain transformations and application transactions without a GUI.
 - Add no dependency without a demonstrated need. Pin releases through `Cargo.lock` once generated.
 - Do not copy Bear or Opensidian source, text, logos, themes, screenshots, or assets.
 
 ## Verification
 
-Run JavaScript tests with `node --test tests/*.test.mjs`. From `src-tauri/`, run `cargo fmt -- --check`, `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo build` when the Rust toolchain is available. Exercise the frontend against both its browser preview bridge and the Tauri IPC bridge.
+While the legacy app remains, run JavaScript tests with `node --test tests/*.test.mjs`. From `src-tauri/`, run `cargo fmt -- --check`, `cargo test --locked`, `cargo clippy --locked --all-targets --all-features -- -D warnings`, and `cargo build --locked`. Exercise the legacy frontend against its browser preview and Tauri IPC bridges when changing it.
+
+Once the native Cargo workspace exists, also run `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and `cargo build --workspace --all-targets --all-features --locked`. Verify dependency boundaries, legacy-data compatibility, failed-save recovery, and native editor/dialog behavior. Validate installers on Windows; containers do not prove native GUI or installer behavior.
 
