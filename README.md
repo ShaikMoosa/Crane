@@ -1,6 +1,6 @@
-# Ember Notes
+# Crane
 
-Ember Notes is an original, Bear-inspired local Markdown notebook built with Tauri 2, Rust, and plain HTML/CSS/JavaScript. It has no Node.js runtime and no cloud account: notes are stored as JSON in the operating system's application-data directory.
+Crane is an original, Bear-inspired local Markdown notebook built with Tauri 2, Rust, and plain HTML/CSS/JavaScript. It has no Node.js runtime and no cloud account: notes are stored as JSON in the operating system's application-data directory.
 
 ## What works
 

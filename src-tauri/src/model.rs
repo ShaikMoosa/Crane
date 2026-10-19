@@ -33,9 +33,9 @@ impl Store {
             schema_version: SCHEMA_VERSION,
             notes: vec![
                 Note {
-                    id: "welcome-to-ember".into(),
-                    title: "Welcome to Ember".into(),
-                    body: "# A quiet place for bright ideas\n\nEmber keeps your notes on this computer. Write in Markdown, use #tags to connect ideas, and let the interface stay out of your way.\n\n- [x] Create a first note\n- [ ] Shape it into something useful\n- [ ] Keep the spark".into(),
+                    id: "welcome-to-crane".into(),
+                    title: "Welcome to Crane".into(),
+                    body: "# A quiet place for bright ideas\n\nCrane keeps your notes on this computer. Write in Markdown, use #tags to connect ideas, and let the interface stay out of your way.\n\n- [x] Create a first note\n- [ ] Shape it into something useful\n- [ ] Keep the spark".into(),
                     tags: vec!["tags".into()],
                     created_at: timestamp.saturating_sub(day * 2),
                     updated_at: timestamp.saturating_sub(3_600_000),

@@ -217,7 +217,7 @@ $("#open-library").addEventListener("click", () => setMobilePane("library"));
 $("#editor-back").addEventListener("click", async () => { if (await flushSave()) setMobilePane("list"); });
 $("#retry-save").addEventListener("click", flushSave);
 $("#clear-tag").addEventListener("click", () => { state.tag = null; render(); });
-$("#theme-toggle").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; localStorage.setItem("ember-notes.theme", next); });
+$("#theme-toggle").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; localStorage.setItem("crane.theme", next); });
 document.addEventListener("click", (event) => { if (!event.target.closest(".menu-wrap")) { ui.menu.hidden = true; ui.more.setAttribute("aria-expanded", "false"); } });
 document.addEventListener("keydown", (event) => {
   if (event.ctrlKey && event.key.toLowerCase() === "n") { event.preventDefault(); createNote(); }
@@ -228,14 +228,14 @@ window.addEventListener("blur", flushSave);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSave(); });
 
 async function init() {
-  document.documentElement.dataset.theme = localStorage.getItem("ember-notes.theme") || "light";
+  document.documentElement.dataset.theme = localStorage.getItem("crane.theme") || "light";
   try {
     const store = await bridge.bootstrap();
     state.notes = store.notes;
     state.selectedId = filterNotes(state.notes, state)[0]?.id || null;
     render();
   } catch (error) {
-    showToast(error.message || "Ember could not open its local store");
+    showToast(error.message || "Crane could not open its local store");
   }
 }
 

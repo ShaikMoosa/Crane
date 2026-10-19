@@ -1,4 +1,4 @@
-# Ember Notes development guidance
+# Crane development guidance
 
 ## Product and stack
 

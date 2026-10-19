@@ -1,4 +1,4 @@
-# Ember Notes MVP design
+# Crane MVP design
 
 ## Intent
 

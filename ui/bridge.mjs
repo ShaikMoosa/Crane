@@ -1,11 +1,11 @@
-const STORAGE_KEY = "ember-notes.store.v1";
+const STORAGE_KEY = "crane.store.v1";
 
 const now = Date.now();
 const seedNotes = [
   {
-    id: "welcome-to-ember",
-    title: "Welcome to Ember",
-    body: "# A quiet place for bright ideas\n\nEmber keeps your notes on this computer. Write in Markdown, use #tags to connect ideas, and let the interface stay out of your way.\n\n- [x] Create a first note\n- [ ] Shape it into something useful\n- [ ] Keep the spark",
+    id: "welcome-to-crane",
+    title: "Welcome to Crane",
+    body: "# A quiet place for bright ideas\n\nCrane keeps your notes on this computer. Write in Markdown, use #tags to connect ideas, and let the interface stay out of your way.\n\n- [x] Create a first note\n- [ ] Shape it into something useful\n- [ ] Keep the spark",
     tags: ["tags"],
     createdAt: now - 172800000,
     updatedAt: now - 3600000,

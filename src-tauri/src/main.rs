@@ -100,6 +100,6 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![bootstrap, create_note, save_note, set_note_state])
         .run(tauri::generate_context!())
-        .expect("error while running Ember Notes");
+        .expect("error while running Crane");
 }
 

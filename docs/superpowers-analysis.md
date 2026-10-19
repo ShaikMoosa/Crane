@@ -1,4 +1,4 @@
-# Superpowers analysis for Ember Notes
+# Superpowers analysis for Crane
 
 Source examined: <https://github.com/obra/superpowers> at commit `bb92a77741419a4ab5f06e711a283343f1ada0c3` (release 7.0.0, 2026-10-09). The repository is MIT-licensed.
 
@@ -19,7 +19,7 @@ Superpowers is not a UI framework or runtime dependency. It is a Codex-compatibl
 
 ## Fit for this project
 
-The strongest fit is process, not code reuse. Ember Notes records its design and plan under `docs/superpowers/`, keeps testable note-domain logic separate from DOM code, writes backend persistence tests before implementation where the toolchain permits, and reports verification gaps without guessing.
+The strongest fit is process, not code reuse. Crane records its design and plan under `docs/superpowers/`, keeps testable note-domain logic separate from DOM code, writes backend persistence tests before implementation where the toolchain permits, and reports verification gaps without guessing.
 
 The project does not vendor the Superpowers repository. The official Codex plugin is the correct installation because its bootstrap and harness adaptation are part of the behavior; copying loose skill folders would omit that integration.
 

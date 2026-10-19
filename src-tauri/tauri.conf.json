@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Ember Notes",
+  "productName": "Crane",
   "version": "0.1.0",
-  "identifier": "app.embernotes.desktop",
+  "identifier": "app.crane.desktop",
   "build": {
     "frontendDist": "../ui"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Ember Notes",
+        "title": "Crane",
         "width": 1240,
         "height": 780,
         "minWidth": 720,
@@ -30,7 +30,7 @@
     "targets": "all",
     "category": "Productivity",
     "shortDescription": "A calm, private Markdown notebook",
-    "longDescription": "Ember Notes is a local-first desktop notebook for Markdown writing, inline tags, and focused organization.",
+    "longDescription": "Crane is a local-first desktop notebook for Markdown writing, inline tags, and focused organization.",
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper",

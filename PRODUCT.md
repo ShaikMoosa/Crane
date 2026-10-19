@@ -1,4 +1,4 @@
-# Ember Notes
+# Crane
 
 <!-- impeccable:product-schema 1 -->
 
@@ -16,7 +16,7 @@ Primary user: one person writing and organizing private notes on a Windows deskt
 
 ## Product Purpose
 
-Ember Notes is a fast, local-first writing space for capturing Markdown notes, organizing them with inline tags, and finding them again without an account or cloud dependency. Success means opening the app and moving from thought to writing in seconds.
+Crane is a fast, local-first writing space for capturing Markdown notes, organizing them with inline tags, and finding them again without an account or cloud dependency. Success means opening the app and moving from thought to writing in seconds.
 
 ## Positioning
 
@@ -40,7 +40,7 @@ The application combines a calm three-pane writing environment with transparent 
 
 ## Brand Commitments
 
-The working name is Ember Notes. Its voice is calm, literate, direct, and private. Bear is a functional and interaction reference, not a branding source.
+The product name is Crane. Its voice is calm, literate, direct, and private. Bear is a functional and interaction reference, not a branding source.
 
 ## Evidence on Hand
 

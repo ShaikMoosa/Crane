@@ -1,5 +1,5 @@
 ---
-name: Ember Notes
+name: Crane
 description: A calm local-first writing space shaped like a writer's desk at dusk.
 colors:
   rail: "#242523"
@@ -120,13 +120,13 @@ components:
     padding: "9px 14px"
 ---
 
-# Design System: Ember Notes
+# Design System: Crane
 
 ## Overview
 
 **Creative North Star: "Writer's desk at dusk"**
 
-Ember Notes feels like moving from a charcoal bookcase to a stack of warm index sheets and finally to a bright page under a focused lamp. It is a quiet operating interface: familiar navigation and controls carry the work, while material contrast, restrained typography, and rare ember cues make the system feel authored.
+Crane feels like moving from a charcoal bookcase to a stack of warm index sheets and finally to a bright page under a focused lamp. It is a quiet operating interface: familiar navigation and controls carry the work, while material contrast, restrained typography, and rare ember cues make the system feel authored.
 
 The rail is dense and recessive, the note list is warmer and more tactile, and the editor is the brightest, calmest surface. The writing surface uses serif type for long-form focus; interface controls remain compact sans-serif. Color is functional rather than decorative, and the save confirmation is the one signature motion.
 

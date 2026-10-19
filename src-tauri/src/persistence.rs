@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn round_trips_a_store() {
-        let folder = std::env::temp_dir().join(format!("ember-notes-test-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("crane-test-{}", std::process::id()));
         let path = folder.join("notes.json");
         let source = Store::seed(42);
         save(&path, &source).expect("save should succeed");
