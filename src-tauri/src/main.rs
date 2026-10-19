@@ -597,6 +597,20 @@ mod main_tests {
     use super::*;
     use crate::transfer::backup::{BackupInspection, PendingRestore};
 
+    #[test]
+    fn shared_resolver_matches_tauri_app_data_dir() {
+        let mut context = tauri::test::mock_context(tauri::test::noop_assets());
+        context.config_mut().identifier = "app.crane.desktop".into();
+        let app = tauri::test::mock_builder()
+            .build(context)
+            .expect("the Tauri path test app must build");
+
+        assert_eq!(
+            crane_platform::resolve_legacy_data_dir().unwrap(),
+            app.path().app_data_dir().unwrap()
+        );
+    }
+
     fn pending(token: &str) -> PendingRestore {
         PendingRestore {
             token: token.into(),

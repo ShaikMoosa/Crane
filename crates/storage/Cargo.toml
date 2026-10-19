@@ -1,0 +1,10 @@
+[package]
+name = "crane-storage"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+crane-domain = { path = "../domain" }
+crane-platform = { path = "../platform" }
+serde_json.workspace = true
