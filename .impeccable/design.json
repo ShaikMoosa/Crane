@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T06:57:31.6458785+05:30",
+  "title": "Design System: Ember Notes",
+  "extensions": {
+    "colorMeta": {
+      "rail": {
+        "role": "neutral",
+        "displayName": "Charcoal Rail",
+        "canonical": "#242523",
+        "tonalRamp": ["oklch(15% 0.004 128.6)", "oklch(27% 0.004 128.6)", "oklch(39% 0.004 128.6)", "oklch(51% 0.004 128.6)", "oklch(63% 0.004 128.6)", "oklch(75% 0.004 128.6)", "oklch(87% 0.004 128.6)", "oklch(95% 0.004 128.6)"]
+      },
+      "rail-raised": {
+        "role": "neutral",
+        "displayName": "Raised Charcoal",
+        "canonical": "#30312e",
+        "tonalRamp": ["oklch(15% 0.005 121.8)", "oklch(27% 0.005 121.8)", "oklch(39% 0.005 121.8)", "oklch(51% 0.005 121.8)", "oklch(63% 0.005 121.8)", "oklch(75% 0.005 121.8)", "oklch(87% 0.005 121.8)", "oklch(95% 0.005 121.8)"]
+      },
+      "rail-muted": {
+        "role": "neutral",
+        "displayName": "Rail Muted",
+        "canonical": "#b9bbb4",
+        "tonalRamp": ["oklch(15% 0.010 119.6)", "oklch(27% 0.010 119.6)", "oklch(39% 0.010 119.6)", "oklch(51% 0.010 119.6)", "oklch(63% 0.010 119.6)", "oklch(75% 0.010 119.6)", "oklch(87% 0.010 119.6)", "oklch(95% 0.010 119.6)"]
+      },
+      "rail-subtle": {
+        "role": "neutral",
+        "displayName": "Rail Subtle",
+        "canonical": "#a1a39c",
+        "tonalRamp": ["oklch(15% 0.010 119.7)", "oklch(27% 0.010 119.7)", "oklch(39% 0.010 119.7)", "oklch(51% 0.010 119.7)", "oklch(63% 0.010 119.7)", "oklch(75% 0.010 119.7)", "oklch(87% 0.010 119.7)", "oklch(95% 0.010 119.7)"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#f1eee7",
+        "tonalRamp": ["oklch(15% 0.010 87.5)", "oklch(27% 0.010 87.5)", "oklch(39% 0.010 87.5)", "oklch(51% 0.010 87.5)", "oklch(63% 0.010 87.5)", "oklch(75% 0.010 87.5)", "oklch(87% 0.010 87.5)", "oklch(95% 0.010 87.5)"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Editorial Canvas",
+        "canonical": "#fbfaf7",
+        "tonalRamp": ["oklch(15% 0.004 91.4)", "oklch(27% 0.004 91.4)", "oklch(39% 0.004 91.4)", "oklch(51% 0.004 91.4)", "oklch(63% 0.004 91.4)", "oklch(75% 0.004 91.4)", "oklch(87% 0.004 91.4)", "oklch(95% 0.004 91.4)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#282721",
+        "tonalRamp": ["oklch(15% 0.011 99.3)", "oklch(27% 0.011 99.3)", "oklch(39% 0.011 99.3)", "oklch(51% 0.011 99.3)", "oklch(63% 0.011 99.3)", "oklch(75% 0.011 99.3)", "oklch(87% 0.011 99.3)", "oklch(95% 0.011 99.3)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#5f5c55",
+        "tonalRamp": ["oklch(15% 0.012 87.5)", "oklch(27% 0.012 87.5)", "oklch(39% 0.012 87.5)", "oklch(51% 0.012 87.5)", "oklch(63% 0.012 87.5)", "oklch(75% 0.012 87.5)", "oklch(87% 0.012 87.5)", "oklch(95% 0.012 87.5)"]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#69655d",
+        "tonalRamp": ["oklch(15% 0.013 84.6)", "oklch(27% 0.013 84.6)", "oklch(39% 0.013 84.6)", "oklch(51% 0.013 84.6)", "oklch(63% 0.013 84.6)", "oklch(75% 0.013 84.6)", "oklch(87% 0.013 84.6)", "oklch(95% 0.013 84.6)"]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Warm Rule",
+        "canonical": "#ded9cf",
+        "tonalRamp": ["oklch(15% 0.015 84.6)", "oklch(27% 0.015 84.6)", "oklch(39% 0.015 84.6)", "oklch(51% 0.015 84.6)", "oklch(63% 0.015 84.6)", "oklch(75% 0.015 84.6)", "oklch(87% 0.015 84.6)", "oklch(95% 0.015 84.6)"]
+      },
+      "ember": {
+        "role": "primary",
+        "displayName": "Ember",
+        "canonical": "#df5b42",
+        "tonalRamp": ["oklch(15% 0.170 32.6)", "oklch(27% 0.170 32.6)", "oklch(39% 0.170 32.6)", "oklch(51% 0.170 32.6)", "oklch(63% 0.170 32.6)", "oklch(75% 0.170 32.6)", "oklch(87% 0.170 32.6)", "oklch(95% 0.170 32.6)"]
+      },
+      "ember-text": {
+        "role": "primary",
+        "displayName": "Deep Ember Text",
+        "canonical": "#ad3b29",
+        "tonalRamp": ["oklch(15% 0.152 31.6)", "oklch(27% 0.152 31.6)", "oklch(39% 0.152 31.6)", "oklch(51% 0.152 31.6)", "oklch(63% 0.152 31.6)", "oklch(75% 0.152 31.6)", "oklch(87% 0.152 31.6)", "oklch(95% 0.152 31.6)"]
+      },
+      "ember-soft": {
+        "role": "primary",
+        "displayName": "Soft Ember Wash",
+        "canonical": "#f4d7cf",
+        "tonalRamp": ["oklch(15% 0.034 35.9)", "oklch(27% 0.034 35.9)", "oklch(39% 0.034 35.9)", "oklch(51% 0.034 35.9)", "oklch(63% 0.034 35.9)", "oklch(75% 0.034 35.9)", "oklch(87% 0.034 35.9)", "oklch(95% 0.034 35.9)"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Ember",
+        "canonical": "#e27560",
+        "tonalRamp": ["oklch(15% 0.140 32.2)", "oklch(27% 0.140 32.2)", "oklch(39% 0.140 32.2)", "oklch(51% 0.140 32.2)", "oklch(63% 0.140 32.2)", "oklch(75% 0.140 32.2)", "oklch(87% 0.140 32.2)", "oklch(95% 0.140 32.2)"]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Night Paper",
+        "canonical": "#292a27",
+        "tonalRamp": ["oklch(15% 0.006 121.8)", "oklch(27% 0.006 121.8)", "oklch(39% 0.006 121.8)", "oklch(51% 0.006 121.8)", "oklch(63% 0.006 121.8)", "oklch(75% 0.006 121.8)", "oklch(87% 0.006 121.8)", "oklch(95% 0.006 121.8)"]
+      },
+      "canvas-dark": {
+        "role": "neutral",
+        "displayName": "Night Canvas",
+        "canonical": "#20211f",
+        "tonalRamp": ["oklch(15% 0.004 128.6)", "oklch(27% 0.004 128.6)", "oklch(39% 0.004 128.6)", "oklch(51% 0.004 128.6)", "oklch(63% 0.004 128.6)", "oklch(75% 0.004 128.6)", "oklch(87% 0.004 128.6)", "oklch(95% 0.004 128.6)"]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#ece8df",
+        "tonalRamp": ["oklch(15% 0.013 86.8)", "oklch(27% 0.013 86.8)", "oklch(39% 0.013 86.8)", "oklch(51% 0.013 86.8)", "oklch(63% 0.013 86.8)", "oklch(75% 0.013 86.8)", "oklch(87% 0.013 86.8)", "oklch(95% 0.013 86.8)"]
+      },
+      "muted-dark": {
+        "role": "neutral",
+        "displayName": "Night Muted Ink",
+        "canonical": "#a9a59c",
+        "tonalRamp": ["oklch(15% 0.014 86.8)", "oklch(27% 0.014 86.8)", "oklch(39% 0.014 86.8)", "oklch(51% 0.014 86.8)", "oklch(63% 0.014 86.8)", "oklch(75% 0.014 86.8)", "oklch(87% 0.014 86.8)", "oklch(95% 0.014 86.8)"]
+      },
+      "faint-dark": {
+        "role": "neutral",
+        "displayName": "Night Faint Ink",
+        "canonical": "#b7b3aa",
+        "tonalRamp": ["oklch(15% 0.013 86.8)", "oklch(27% 0.013 86.8)", "oklch(39% 0.013 86.8)", "oklch(51% 0.013 86.8)", "oklch(63% 0.013 86.8)", "oklch(75% 0.013 86.8)", "oklch(87% 0.013 86.8)", "oklch(95% 0.013 86.8)"]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Night Rule",
+        "canonical": "#3b3d39",
+        "tonalRamp": ["oklch(15% 0.007 128.7)", "oklch(27% 0.007 128.7)", "oklch(39% 0.007 128.7)", "oklch(51% 0.007 128.7)", "oklch(63% 0.007 128.7)", "oklch(75% 0.007 128.7)", "oklch(87% 0.007 128.7)", "oklch(95% 0.007 128.7)"]
+      },
+      "ember-soft-dark": {
+        "role": "primary",
+        "displayName": "Night Ember Wash",
+        "canonical": "#53332c",
+        "tonalRamp": ["oklch(15% 0.048 33.0)", "oklch(27% 0.048 33.0)", "oklch(39% 0.048 33.0)", "oklch(51% 0.048 33.0)", "oklch(63% 0.048 33.0)", "oklch(75% 0.048 33.0)", "oklch(87% 0.048 33.0)", "oklch(95% 0.048 33.0)"]
+      },
+      "ember-text-dark": {
+        "role": "primary",
+        "displayName": "Night Ember Text",
+        "canonical": "#f18a75",
+        "tonalRamp": ["oklch(15% 0.130 32.5)", "oklch(27% 0.130 32.5)", "oklch(39% 0.130 32.5)", "oklch(51% 0.130 32.5)", "oklch(63% 0.130 32.5)", "oklch(75% 0.130 32.5)", "oklch(87% 0.130 32.5)", "oklch(95% 0.130 32.5)"]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "Action White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(27% 0 0)", "oklch(39% 0 0)", "oklch(51% 0 0)", "oklch(63% 0 0)", "oklch(75% 0 0)", "oklch(87% 0 0)", "oklch(95% 0 0)"]
+      },
+      "new-note-hover": {
+        "role": "primary",
+        "displayName": "Deep Action Ember",
+        "canonical": "#c94d37",
+        "tonalRamp": ["oklch(15% 0.163 32.2)", "oklch(27% 0.163 32.2)", "oklch(39% 0.163 32.2)", "oklch(51% 0.163 32.2)", "oklch(63% 0.163 32.2)", "oklch(75% 0.163 32.2)", "oklch(87% 0.163 32.2)", "oklch(95% 0.163 32.2)"]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "Save Error",
+        "canonical": "#9b3325",
+        "tonalRamp": ["oklch(15% 0.141 30.6)", "oklch(27% 0.141 30.6)", "oklch(39% 0.141 30.6)", "oklch(51% 0.141 30.6)", "oklch(63% 0.141 30.6)", "oklch(75% 0.141 30.6)", "oklch(87% 0.141 30.6)", "oklch(95% 0.141 30.6)"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Destructive Red",
+        "canonical": "#be4a39",
+        "tonalRamp": ["oklch(15% 0.153 30.8)", "oklch(27% 0.153 30.8)", "oklch(39% 0.153 30.8)", "oklch(51% 0.153 30.8)", "oklch(63% 0.153 30.8)", "oklch(75% 0.153 30.8)", "oklch(87% 0.153 30.8)", "oklch(95% 0.153 30.8)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Document Display",
+        "purpose": "Borderless note titles on the editor canvas."
+      },
+      "headline": {
+        "displayName": "Collection Headline",
+        "purpose": "Collection headings and prominent empty-state headings."
+      },
+      "title": {
+        "displayName": "Interface Title",
+        "purpose": "Dense note-row titles and compact high-information labels."
+      },
+      "body": {
+        "displayName": "Writing Body",
+        "purpose": "Long-form editing and Markdown preview."
+      },
+      "label": {
+        "displayName": "Structural Label",
+        "purpose": "Sparse uppercase section labels within the library rail."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ambient-surface",
+        "value": "0 18px 45px rgba(43, 37, 29, 0.08)",
+        "purpose": "Available for light-theme lifted surfaces; resolves to none in dark mode."
+      },
+      {
+        "name": "ember-action",
+        "value": "0 7px 20px rgba(223, 91, 66, 0.24)",
+        "purpose": "Soft lift for the circular create-note action."
+      },
+      {
+        "name": "transient-menu",
+        "value": "0 14px 34px rgba(31, 29, 24, 0.16)",
+        "purpose": "Structural lift for the note action menu."
+      },
+      {
+        "name": "overlay-toast",
+        "value": "0 10px 30px rgba(0, 0, 0, 0.24)",
+        "purpose": "Temporary overlay depth for toast feedback."
+      }
+    ],
+    "motion": [
+      {
+        "name": "save-rule-expand",
+        "value": "width 320ms ease",
+        "purpose": "Extends the save rule while a note is being written to disk."
+      },
+      {
+        "name": "save-color-shift",
+        "value": "background-color 180ms ease",
+        "purpose": "Moves the save rule between neutral and ember states."
+      },
+      {
+        "name": "saved-pulse",
+        "value": "420ms ease-out both",
+        "purpose": "Contracts the ember save confirmation to its neutral baseline after success."
+      },
+      {
+        "name": "toast-transition",
+        "value": "180ms ease",
+        "purpose": "Fades and lifts transient toast feedback."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms transitions; saved-pulse disabled",
+        "purpose": "Removes visible transition and save-pulse motion when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-rail",
+        "value": "900px"
+      },
+      {
+        "name": "single-pane",
+        "value": "680px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "New Note Button",
+      "kind": "button",
+      "refersTo": "new-note-button",
+      "description": "The sole circular primary action creates a fresh note.",
+      "html": "<button class=\"ds-new-note\" type=\"button\" aria-label=\"Create a new note\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M12 5v14M5 12h14\"/></svg></button>",
+      "css": ".ds-new-note { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--ember, #df5b42); color: #fff; box-shadow: 0 7px 20px rgba(223, 91, 66, 0.24); cursor: pointer; transition: background 180ms ease, transform 180ms ease; } .ds-new-note svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; } .ds-new-note:hover { background: #c94d37; transform: translateY(-1px); } .ds-new-note:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 2px; } .ds-new-note:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Library Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "A full-width charcoal-rail destination with a slim ember active marker.",
+      "html": "<button class=\"ds-nav-item is-active\" type=\"button\" aria-current=\"page\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M6.75 3.75h8.5l3 3v13.5H6.75z\"/><path d=\"M15.25 3.75v3h3M9.5 11h6M9.5 14.5h6\"/></svg><span>Notes</span><kbd>8</kbd></button>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 40px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--rail-muted, #b9bbb4); font: 13px Inter, ui-sans-serif, sans-serif; cursor: pointer; text-align: left; } .ds-nav-item svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; } .ds-nav-item kbd { margin-left: auto; border: 0; background: none; color: var(--rail-subtle, #a1a39c); font: 11px/1 inherit; } .ds-nav-item:hover, .ds-nav-item.is-active { background: var(--rail-raised, #30312e); color: #fff; } .ds-nav-item.is-active { box-shadow: inset 3px 0 var(--ember, #df5b42); } .ds-nav-item:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 2px; }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "A low-contrast paper search control that becomes explicit only on focus.",
+      "html": "<label class=\"ds-search\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><circle cx=\"10.5\" cy=\"10.5\" r=\"6\"/><path d=\"m15 15 4.5 4.5\"/></svg><input type=\"search\" placeholder=\"Search your notes\"><kbd>Ctrl F</kbd></label>",
+      "css": ".ds-search { display: flex; align-items: center; gap: 8px; height: 37px; padding: 0 11px; border: 1px solid var(--rule, #ded9cf); border-radius: 7px; background: color-mix(in srgb, var(--canvas, #fbfaf7) 72%, transparent); color: var(--faint, #69655d); font-family: Inter, ui-sans-serif, sans-serif; } .ds-search:focus-within { border-color: var(--focus, #e27560); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus, #e27560) 14%, transparent); } .ds-search svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; } .ds-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink, #282721); font: 12px Inter, ui-sans-serif, sans-serif; } .ds-search input::placeholder { color: var(--faint, #69655d); } .ds-search kbd { color: var(--faint, #69655d); font: 9px/1 ui-monospace, monospace; }"
+    },
+    {
+      "name": "Note Row",
+      "kind": "card",
+      "refersTo": "note-row",
+      "description": "A flat, ruled list item with an editorial excerpt and ember selection marker.",
+      "html": "<button class=\"ds-note-row is-selected\" type=\"button\" aria-current=\"true\"><span class=\"ds-note-title\">The quiet work</span><span class=\"ds-note-excerpt\">A place for the paragraph that should remain close at hand.</span><span class=\"ds-note-meta\"><span>Oct 19</span><span class=\"ds-note-tag\">#draft</span></span></button>",
+      "css": ".ds-note-row { position: relative; display: block; width: 100%; padding: 15px 12px 14px; border: 0; border-bottom: 1px solid var(--rule, #ded9cf); background: transparent; color: var(--ink, #282721); cursor: pointer; text-align: left; } .ds-note-row:hover { background: color-mix(in srgb, var(--canvas, #fbfaf7) 55%, transparent); } .ds-note-row.is-selected { background: color-mix(in srgb, var(--canvas, #fbfaf7) 40%, transparent); } .ds-note-row.is-selected::before { content: \"\"; position: absolute; top: 14px; bottom: 14px; left: 0; width: 3px; border-radius: 2px; background: var(--ember, #df5b42); } .ds-note-title { display: block; font: 650 13px Inter, ui-sans-serif, sans-serif; } .ds-note-excerpt { display: -webkit-box; margin: 7px 0 11px; overflow: hidden; color: var(--muted, #5f5c55); font: 12px/1.45 Georgia, serif; -webkit-box-orient: vertical; -webkit-line-clamp: 2; } .ds-note-meta { display: flex; gap: 7px; color: var(--faint, #69655d); font: 9px Inter, ui-sans-serif, sans-serif; } .ds-note-tag { color: var(--ember-text, #ad3b29); } .ds-note-row:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 2px; }"
+    },
+    {
+      "name": "Toolbar Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "A quiet square tool control that picks up ember only when relevant.",
+      "html": "<button class=\"ds-icon-button\" type=\"button\" aria-label=\"Toggle Markdown preview\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M3 12s3.5-5 9-5 9 5 9 5-3.5 5-9 5-9-5-9-5z\"/><circle cx=\"12\" cy=\"12\" r=\"2.5\"/></svg></button>",
+      "css": ".ds-icon-button { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted, #5f5c55); cursor: pointer; } .ds-icon-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; } .ds-icon-button:hover, .ds-icon-button.is-active { background: var(--ember-soft, #f4d7cf); color: var(--ember, #df5b42); } .ds-icon-button:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 2px; } .ds-icon-button:active { background: color-mix(in srgb, var(--ember-soft, #f4d7cf) 78%, var(--ember, #df5b42)); }"
+    },
+    {
+      "name": "Empty State Action",
+      "kind": "button",
+      "refersTo": "empty-action",
+      "description": "A compact outlined action used when the editor has no selected note.",
+      "html": "<button class=\"ds-empty-action\" type=\"button\">Write a new note</button>",
+      "css": ".ds-empty-action { padding: 9px 14px; border: 1px solid var(--ember, #df5b42); border-radius: 5px; background: transparent; color: var(--ember, #df5b42); font: 11px Inter, ui-sans-serif, sans-serif; cursor: pointer; } .ds-empty-action:hover { background: var(--ember-soft, #f4d7cf); } .ds-empty-action:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 2px; } .ds-empty-action:active { background: color-mix(in srgb, var(--ember-soft, #f4d7cf) 75%, var(--ember, #df5b42)); }"
+    },
+    {
+      "name": "Action Menu",
+      "kind": "custom",
+      "description": "A compact lifted menu for archive, trash, and restore actions.",
+      "html": "<div class=\"ds-action-menu\" role=\"menu\"><button type=\"button\" role=\"menuitem\">Move to archive</button><button class=\"ds-danger\" type=\"button\" role=\"menuitem\">Move to trash</button></div>",
+      "css": ".ds-action-menu { width: 176px; padding: 6px; border: 1px solid var(--rule, #ded9cf); border-radius: 8px; background: var(--canvas, #fbfaf7); box-shadow: 0 14px 34px rgba(31, 29, 24, 0.16); } .ds-action-menu button { display: flex; align-items: center; width: 100%; padding: 9px; border: 0; border-radius: 5px; background: transparent; color: var(--ink, #282721); font: 11px Inter, ui-sans-serif, sans-serif; cursor: pointer; text-align: left; } .ds-action-menu button:hover { background: var(--paper, #f1eee7); } .ds-action-menu button:focus-visible { outline: 2px solid var(--focus, #e27560); outline-offset: 1px; } .ds-action-menu button:active { background: color-mix(in srgb, var(--paper, #f1eee7) 75%, var(--rule, #ded9cf)); } .ds-action-menu .ds-danger { color: #be4a39; }"
+    },
+    {
+      "name": "Save Feedback",
+      "kind": "custom",
+      "description": "The signature status line expands while saving, then contracts from ember to a neutral rule after success.",
+      "html": "<div class=\"ds-save-feedback\"><p class=\"ds-save-status is-saved-pulse\">Saved locally</p></div>",
+      "css": ".ds-save-feedback { min-width: 95px; } .ds-save-status { position: relative; display: inline-flex; margin: 0; padding-bottom: 5px; color: var(--faint, #69655d); font: 10px Inter, ui-sans-serif, sans-serif; } .ds-save-status::after { content: \"\"; position: absolute; bottom: 0; left: 0; width: 14px; height: 2px; border-radius: 2px; background: var(--rule, #ded9cf); transition: width 320ms ease, background-color 180ms ease; } .ds-save-status.is-saving::after { width: 100%; } .ds-save-status.is-saved-pulse::after { animation: ds-saved-pulse 420ms ease-out both; } @keyframes ds-saved-pulse { 0% { width: 100%; background: var(--ember, #df5b42); } 100% { width: 14px; background: var(--rule, #ded9cf); } } @media (prefers-reduced-motion: reduce) { .ds-save-status::after { transition-duration: 0.01ms; } .ds-save-status.is-saved-pulse::after { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Writer's desk at dusk",
+    "overview": "Ember Notes feels like moving from a charcoal bookcase to a stack of warm index sheets and finally to a bright page under a focused lamp. It is a quiet operating interface: familiar navigation and controls carry the work, while material contrast, restrained typography, and rare ember cues make the system feel authored.\n\nThe rail is dense and recessive, the note list is warmer and more tactile, and the editor is the brightest, calmest surface. The writing surface uses serif type for long-form focus; interface controls remain compact sans-serif. Color is functional rather than decorative, and the save confirmation is the one signature motion.",
+    "keyCharacteristics": [
+      "Three contiguous panes with distinct material roles: charcoal rail, warm paper list, bright editorial canvas.",
+      "Ink-led typography with serif writing surfaces and compact sans-serif interface chrome.",
+      "Ember reserved for selection, focus, tags, active tools, and save confirmation.",
+      "Separators and tonal shifts establish structure; floating cards do not.",
+      "Responsive one-pane navigation below 680px, with explicit library/list/editor movement."
+    ],
+    "rules": [
+      {
+        "name": "The Ember Is Evidence Rule",
+        "body": "Ember marks an action, selection, focus target, authored tag, or completed save; it is never ambient decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Materials Rule",
+        "body": "Keep the rail, list, and editor visibly distinct through charcoal, warm paper, and bright canvas surfaces.",
+        "section": "colors"
+      },
+      {
+        "name": "The Page Owns the Serif Rule",
+        "body": "Use serif type for authored content, document titles, previews, and literary empty states; navigation, metadata, and controls remain sans-serif.",
+        "section": "typography"
+      },
+      {
+        "name": "The Pane Continuity Rule",
+        "body": "Separate regions with rules and surface shifts, never with a dashboard of detached cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-Until-Transient Rule",
+        "body": "Resting panes and note rows stay flat; depth appears only for actions, menus, overlays, and the paper metaphor.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Quiet Corners Rule",
+        "body": "Keep the small-radius vocabulary; do not turn the interface into a field of pills or oversized rounded cards.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do preserve the charcoal rail, warm-paper list, and bright editorial canvas as three adjacent materials.",
+      "Do reserve ember for interactive state, selection, tags, focus, and confirmed save feedback.",
+      "Do keep authored writing and preview content in the editorial serif while interface chrome remains compact sans-serif.",
+      "Do use the 900px rail-collapse breakpoint and the 680px one-pane library/list/editor transition.",
+      "Do keep keyboard focus visible and disable the save pulse when reduced motion is requested."
+    ],
+    "donts": [
+      "Don't replace the pane structure with floating cards, glass panels, gradients, or decorative shadows.",
+      "Don't spread ember across passive backgrounds or ornamental surfaces; its rarity carries meaning.",
+      "Don't use pill-shaped navigation, oversized radii, uppercase eyebrow copy, or decorative monospace.",
+      "Don't introduce a second icon style or reduce compact-screen touch targets below 44px.",
+      "Don't animate routine writing interactions; the sub-500ms save line is the signature motion."
+    ]
+  }
+}
