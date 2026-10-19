@@ -1,5 +1,6 @@
 import { bridge } from "./bridge.mjs";
 import { excerptFrom, extractTags, filterNotes, renderMarkdown } from "./core.mjs";
+import { createTransferController } from "./transfer-controller.mjs";
 
 const $ = (selector) => document.querySelector(selector);
 const ui = {
@@ -11,11 +12,16 @@ const ui = {
   count: $("#notes-count"), date: $("#note-date"), words: $("#word-count"),
   tags: $("#note-tags"), saveStatus: $(".save-status"), saveLabel: $("#save-label"), toast: $("#toast"),
   saveError: $("#save-error"), shell: $(".app-shell"),
+  dataMenuButton: $("#data-menu-button"), dataMenu: $("#data-menu"), exportNote: $("#export-note"),
+  restoreDialog: $("#restore-dialog"), confirmRestore: $("#confirm-restore"), cancelRestore: $("#cancel-restore"),
+  restoreDate: $("#restore-backup-date"), restoreTotal: $("#restore-total"), restoreActive: $("#restore-active"),
+  restoreArchived: $("#restore-archived"), restoreTrashed: $("#restore-trashed"),
 };
 
-const state = { notes: [], selectedId: null, collection: "notes", tag: null, query: "", preview: false, saving: false };
+const state = { notes: [], selectedId: null, collection: "notes", tag: null, query: "", preview: false, saving: false, restoreToken: null };
 let saveTimer;
 let toastTimer;
+let restoreInvoker;
 
 function currentNote() { return state.notes.find((note) => note.id === state.selectedId) || null; }
 function setMobilePane(pane) { ui.shell.dataset.mobilePane = pane; }
@@ -30,8 +36,9 @@ function wordCount(value) {
   const count = value.trim() ? value.trim().split(/\s+/).length : 0;
   return `${count} ${count === 1 ? "word" : "words"}`;
 }
-function showToast(message) {
+function showToast(message, kind = "success") {
   ui.toast.textContent = message;
+  ui.toast.classList.toggle("is-error", kind === "error");
   ui.toast.classList.add("is-visible");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => ui.toast.classList.remove("is-visible"), 2200);
@@ -95,6 +102,7 @@ function renderList() {
 
 function renderEditor() {
   const note = currentNote();
+  ui.exportNote.disabled = !note || transfers.busy;
   ui.editorEmpty.hidden = Boolean(note);
   ui.document.hidden = !note;
   if (!note) return;
@@ -122,6 +130,16 @@ function renderEditor() {
 
 function render() { renderSidebar(); renderList(); renderEditor(); }
 
+function replaceStore(store) {
+  state.notes = store.notes;
+  if (!state.notes.some((note) => note.id === state.selectedId)) {
+    state.collection = "notes";
+    state.tag = null;
+    state.selectedId = filterNotes(state.notes, state)[0]?.id || null;
+  }
+  render();
+}
+
 async function flushSave() {
   clearTimeout(saveTimer);
   const note = currentNote();
@@ -146,6 +164,56 @@ async function flushSave() {
     ui.saveError.querySelector("span").textContent = error.message || "Save failed.";
     return false;
   }
+}
+
+const transfers = createTransferController({
+  bridge,
+  flushSave,
+  selectedNoteId: () => state.selectedId,
+  replaceStore,
+  notify: showToast,
+});
+
+function closeDataMenu() {
+  ui.dataMenu.hidden = true;
+  ui.dataMenuButton.setAttribute("aria-expanded", "false");
+}
+
+function closeActionMenu() {
+  ui.menu.hidden = true;
+  ui.more.setAttribute("aria-expanded", "false");
+}
+
+function syncTransferControls() {
+  document.querySelectorAll(".transfer-action").forEach((button) => {
+    button.disabled = transfers.busy || (button === ui.exportNote && !currentNote());
+  });
+  ui.dataMenuButton.disabled = transfers.busy;
+  ui.shell.setAttribute("aria-busy", String(transfers.busy));
+}
+
+async function runTransfer(action) {
+  const operation = action();
+  syncTransferControls();
+  try {
+    return await operation;
+  } finally {
+    syncTransferControls();
+  }
+}
+
+function showRestoreDialog(inspection) {
+  state.restoreToken = inspection.token;
+  ui.restoreDate.textContent = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(inspection.createdAt);
+  ui.restoreTotal.textContent = String(inspection.total);
+  ui.restoreActive.textContent = String(inspection.active);
+  ui.restoreArchived.textContent = String(inspection.archived);
+  ui.restoreTrashed.textContent = String(inspection.trashed);
+  ui.restoreDialog.showModal();
+  ui.cancelRestore.focus();
 }
 
 function scheduleSave() {
@@ -193,7 +261,7 @@ async function changeState(field, value) {
   try {
     updateNote(await bridge.setNoteState(note.id, field, value));
     if ((field === "archived" || field === "trashed") && value) state.selectedId = null;
-    ui.menu.hidden = true;
+    closeActionMenu();
     render();
   } catch (error) { showToast(error.message || "Could not update the note"); }
 }
@@ -208,21 +276,51 @@ ui.search.addEventListener("input", () => { state.query = ui.search.value; rende
 ui.title.addEventListener("input", scheduleSave); ui.body.addEventListener("input", scheduleSave);
 ui.previewToggle.addEventListener("click", () => { state.preview = !state.preview; renderEditor(); });
 ui.pin.addEventListener("click", () => { const note = currentNote(); if (note) changeState("pinned", !note.pinned); });
-ui.more.addEventListener("click", () => { ui.menu.hidden = !ui.menu.hidden; ui.more.setAttribute("aria-expanded", String(!ui.menu.hidden)); });
+ui.more.addEventListener("click", () => { closeDataMenu(); ui.menu.hidden = !ui.menu.hidden; ui.more.setAttribute("aria-expanded", String(!ui.menu.hidden)); });
 ui.archive.addEventListener("click", () => { const note = currentNote(); if (note) changeState("archived", !note.archived); });
 ui.trash.addEventListener("click", () => changeState("trashed", true));
 ui.restore.addEventListener("click", () => { const note = currentNote(); if (!note) return; changeState(note.trashed ? "trashed" : "archived", false); });
+ui.dataMenuButton.addEventListener("click", () => {
+  closeActionMenu();
+  ui.dataMenu.hidden = !ui.dataMenu.hidden;
+  ui.dataMenuButton.setAttribute("aria-expanded", String(!ui.dataMenu.hidden));
+});
+$("#import-markdown").addEventListener("click", async () => { closeDataMenu(); await runTransfer(() => transfers.importMarkdown()); });
+ui.exportNote.addEventListener("click", async () => { closeActionMenu(); await runTransfer(() => transfers.exportNote()); });
+$("#export-library").addEventListener("click", async () => { closeDataMenu(); await runTransfer(() => transfers.exportLibrary()); });
+$("#create-backup").addEventListener("click", async () => { closeDataMenu(); await runTransfer(() => transfers.createBackup()); });
+$("#inspect-backup").addEventListener("click", async () => {
+  restoreInvoker = ui.dataMenuButton;
+  closeDataMenu();
+  const outcome = await runTransfer(() => transfers.inspectBackup());
+  if (outcome?.status === "completed") showRestoreDialog(outcome.data);
+});
+ui.confirmRestore.addEventListener("click", async () => {
+  const token = state.restoreToken;
+  if (!token) return;
+  const outcome = await runTransfer(() => transfers.restoreBackup(token));
+  if (outcome?.status !== "ignored") ui.restoreDialog.close(outcome?.status || "error");
+});
+ui.restoreDialog.addEventListener("close", () => {
+  state.restoreToken = null;
+  restoreInvoker?.focus();
+  restoreInvoker = null;
+});
 $("#new-note").addEventListener("click", createNote); $("#empty-new-note").addEventListener("click", createNote);
 $("#open-library").addEventListener("click", () => setMobilePane("library"));
 $("#editor-back").addEventListener("click", async () => { if (await flushSave()) setMobilePane("list"); });
 $("#retry-save").addEventListener("click", flushSave);
 $("#clear-tag").addEventListener("click", () => { state.tag = null; render(); });
 $("#theme-toggle").addEventListener("click", () => { const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; localStorage.setItem("crane.theme", next); });
-document.addEventListener("click", (event) => { if (!event.target.closest(".menu-wrap")) { ui.menu.hidden = true; ui.more.setAttribute("aria-expanded", "false"); } });
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".menu-wrap")) closeActionMenu();
+  if (!event.target.closest(".data-menu-wrap")) closeDataMenu();
+});
 document.addEventListener("keydown", (event) => {
+  if (ui.restoreDialog.open) return;
   if (event.ctrlKey && event.key.toLowerCase() === "n") { event.preventDefault(); createNote(); }
   if (event.ctrlKey && event.key.toLowerCase() === "f") { event.preventDefault(); ui.search.focus(); }
-  if (event.key === "Escape") { ui.menu.hidden = true; setMobilePane("list"); }
+  if (event.key === "Escape") { closeActionMenu(); closeDataMenu(); setMobilePane("list"); }
 });
 window.addEventListener("blur", flushSave);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSave(); });

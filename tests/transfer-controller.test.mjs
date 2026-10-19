@@ -151,3 +151,71 @@ test("duplicate_activation_while_busy_is_ignored", async () => {
   await first;
   assert.equal(controller.busy, false);
 });
+
+test("inspection_alone_never_restores", async () => {
+  let restores = 0;
+  const { controller } = setup({
+    bridge: {
+      inspectBackup: async () => ({
+        status: "completed",
+        data: { token: "inspect-only", total: 2 },
+      }),
+      restoreBackup: async () => {
+        restores += 1;
+        return { status: "completed", data: { notes: [] } };
+      },
+    },
+  });
+
+  const outcome = await controller.inspectBackup();
+
+  assert.equal(outcome.data.token, "inspect-only");
+  assert.equal(restores, 0);
+});
+
+test("cancel_never_calls_restoreBackup", async () => {
+  let restores = 0;
+  const { controller } = setup({
+    bridge: {
+      inspectBackup: async () => ({ status: "completed", data: { token: "cancelled" } }),
+      restoreBackup: async () => {
+        restores += 1;
+      },
+    },
+  });
+
+  await controller.inspectBackup();
+  // The UI cancels by closing the dialog and intentionally makes no second controller call.
+  assert.equal(restores, 0);
+});
+
+test("confirm passes exactly the inspected token", async () => {
+  const tokens = [];
+  const { controller } = setup({
+    bridge: {
+      restoreBackup: async (token) => {
+        tokens.push(token);
+        return { status: "completed", data: { schemaVersion: 1, notes: [] } };
+      },
+    },
+  });
+
+  await controller.restoreBackup("opaque-one-use-token");
+
+  assert.deepEqual(tokens, ["opaque-one-use-token"]);
+});
+
+test("expired token error leaves existing state untouched", async () => {
+  const { controller, events } = setup({
+    bridge: {
+      restoreBackup: async () => {
+        throw new Error("That restore confirmation is no longer valid.");
+      },
+    },
+  });
+
+  const outcome = await controller.restoreBackup("expired");
+
+  assert.equal(outcome.status, "error");
+  assert.equal(events.some((event) => Array.isArray(event) && event[0] === "replace"), false);
+});

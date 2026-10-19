@@ -21,6 +21,9 @@
       <symbol id="i-edit" viewBox="0 0 24 24"><path d="M5 19h4l10-10-4-4L5 15zM13.5 6.5l4 4"/></symbol>
       <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></symbol>
+      <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.5v11M8 10.5l4 4 4-4M5 16.5v3h14v-3"/></symbol>
+      <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 16.5v3h14v-3"/></symbol>
+      <symbol id="i-backup" viewBox="0 0 24 24"><path d="M6 7.5C6 5.6 8.7 4 12 4s6 1.6 6 3.5S15.3 11 12 11 6 9.4 6 7.5zM6 7.5v4c0 1.9 2.7 3.5 6 3.5s6-1.6 6-3.5v-4M6 11.5v4c0 1.9 2.7 3.5 6 3.5s6-1.6 6-3.5v-4"/></symbol>
     </svg>
 
     <main class="app-shell" data-mobile-pane="list">
@@ -41,6 +44,15 @@
         <nav class="tag-nav" id="tag-nav" aria-label="Tags"></nav>
 
         <div class="library-footer">
+          <div class="data-menu-wrap">
+            <button class="theme-button data-menu-button" id="data-menu-button" aria-label="Data actions" aria-expanded="false" aria-controls="data-menu"><svg><use href="#i-backup"></use></svg><span class="button-label">Data</span><svg class="menu-chevron"><use href="#i-chevron"></use></svg></button>
+            <div class="data-menu" id="data-menu" role="menu" hidden>
+              <button class="transfer-action" id="import-markdown" role="menuitem"><svg><use href="#i-import"></use></svg><span>Import Markdown</span></button>
+              <button class="transfer-action" id="export-library" role="menuitem"><svg><use href="#i-export"></use></svg><span>Export Library</span></button>
+              <button class="transfer-action" id="create-backup" role="menuitem"><svg><use href="#i-backup"></use></svg><span>Create Backup</span></button>
+              <button class="transfer-action" id="inspect-backup" role="menuitem"><svg><use href="#i-backup"></use></svg><span>Restore Backup</span></button>
+            </div>
+          </div>
           <button class="theme-button" id="theme-toggle"><svg><use href="#i-sun"></use></svg><span>Change appearance</span></button>
           <p>Private by default<br><span>Saved on this device</span></p>
         </div>
@@ -83,6 +95,7 @@
             <div class="menu-wrap">
               <button class="icon-button" id="more-menu-button" title="More note actions" aria-label="More note actions" aria-expanded="false"><svg><use href="#i-more"></use></svg></button>
               <div class="action-menu" id="action-menu" hidden>
+                <button class="transfer-action" id="export-note"><svg><use href="#i-export"></use></svg><span>Export note</span></button>
                 <button id="archive-note"><svg><use href="#i-archive"></use></svg><span>Move to archive</span></button>
                 <button id="trash-note" class="danger"><svg><use href="#i-trash"></use></svg><span>Move to trash</span></button>
                 <button id="restore-note"><svg><use href="#i-note"></use></svg><span>Restore note</span></button>
@@ -107,6 +120,24 @@
         </div>
       </article>
     </main>
+
+    <dialog class="restore-dialog" id="restore-dialog" aria-labelledby="restore-dialog-title" aria-describedby="restore-dialog-description">
+      <form method="dialog" class="restore-dialog-sheet">
+        <h2 id="restore-dialog-title">Replace this library?</h2>
+        <p id="restore-dialog-description">Crane will first save a safety backup, then replace every note in this library with the selected backup.</p>
+        <dl class="restore-summary">
+          <div><dt>Backup created</dt><dd id="restore-backup-date">—</dd></div>
+          <div><dt>Total</dt><dd id="restore-total">0</dd></div>
+          <div><dt>Active</dt><dd id="restore-active">0</dd></div>
+          <div><dt>Archived</dt><dd id="restore-archived">0</dd></div>
+          <div><dt>Trash</dt><dd id="restore-trashed">0</dd></div>
+        </dl>
+        <div class="dialog-actions">
+          <button id="cancel-restore" value="cancel">Cancel</button>
+          <button id="confirm-restore" class="danger transfer-action" type="button">Replace library</button>
+        </div>
+      </form>
+    </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="./app.js"></script>
