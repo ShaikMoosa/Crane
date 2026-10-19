@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "crane-application"
+version = "0.1.0"
+dependencies = [
+ "crane-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "crane-domain"
 version = "0.1.0"
 dependencies = [
@@ -14,6 +22,7 @@ dependencies = [
 name = "crane-platform"
 version = "0.1.0"
 dependencies = [
+ "crane-application",
  "dirs",
  "windows-sys",
 ]
@@ -22,6 +31,7 @@ dependencies = [
 name = "crane-storage"
 version = "0.1.0"
 dependencies = [
+ "crane-application",
  "crane-domain",
  "crane-platform",
  "serde_json",

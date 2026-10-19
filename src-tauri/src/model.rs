@@ -1,7 +1,6 @@
-pub use crane_domain::{
-    extract_tags, Note, Store, MAX_BODY_BYTES, MAX_RENDERABLE_TIMESTAMP, MAX_TITLE_BYTES,
-    SCHEMA_VERSION,
-};
+pub use crane_domain::{extract_tags, Note, Store, MAX_RENDERABLE_TIMESTAMP, SCHEMA_VERSION};
+#[cfg(test)]
+pub use crane_domain::{MAX_BODY_BYTES, MAX_TITLE_BYTES};
 
 pub fn validate_note(note: &Note) -> Result<(), String> {
     crane_domain::validate_note(note).map_err(|error| error.to_string())

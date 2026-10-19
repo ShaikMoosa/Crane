@@ -1,3 +1,4 @@
+mod application_adapter;
 mod atomic;
 mod bounded;
 mod repository;

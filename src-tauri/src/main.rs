@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod application_adapter;
 mod model;
 mod persistence;
 mod transfer;
 
-use model::{extract_tags, validate_note, validate_store, Note, Store};
+use crane_application::{Command, CommandData, NoteState};
+use model::{validate_store, Note, Store};
 use serde::Serialize;
 use std::fs::File;
 use std::io::Read;
@@ -143,17 +145,17 @@ fn format_export_timestamp(timestamp_millis: u64) -> String {
     format!("{year:04}-{month:02}-{day:02} {hour:02}{minute:02}{second:02}")
 }
 
-fn with_store<T>(
+fn execute_note_command(
     state: State<'_, AppState>,
-    operation: impl FnOnce(&mut Store) -> Result<T, String>,
-) -> Result<T, String> {
-    let mut store = state
+    command: Command,
+) -> Result<CommandData, String> {
+    let mut committed = state
         .store
         .lock()
         .map_err(|_| "The note store is unavailable.".to_string())?;
-    let result = operation(&mut store)?;
-    persistence::save(&state.path, &store)?;
-    Ok(result)
+    let (result, snapshot) = application_adapter::execute(&state.path, command)?;
+    *committed = snapshot.store;
+    Ok(result.data)
 }
 
 #[tauri::command]
@@ -167,40 +169,24 @@ fn bootstrap(state: State<'_, AppState>) -> Result<Store, String> {
 
 #[tauri::command]
 fn create_note(state: State<'_, AppState>) -> Result<Note, String> {
-    with_store(state, |store| {
-        let timestamp = now_millis();
-        let note = Note {
-            id: new_id(),
-            title: "Untitled note".into(),
-            body: String::new(),
-            tags: Vec::new(),
-            created_at: timestamp,
-            updated_at: timestamp,
-            pinned: false,
-            archived: false,
-            trashed: false,
-            extensions: Default::default(),
-        };
-        store.notes.push(note.clone());
-        Ok(note)
-    })
+    match execute_note_command(state, Command::CreateNote)? {
+        CommandData::Created(note) => Ok(note),
+        _ => Err("The create-note command returned an unexpected result.".into()),
+    }
 }
 
 #[tauri::command]
-fn save_note(mut note: Note, state: State<'_, AppState>) -> Result<Note, String> {
-    validate_note(&note)?;
-    with_store(state, |store| {
-        let existing = store
-            .notes
-            .iter_mut()
-            .find(|candidate| candidate.id == note.id)
-            .ok_or_else(|| "That note no longer exists.".to_string())?;
-        note.created_at = existing.created_at;
-        note.updated_at = now_millis();
-        note.tags = extract_tags(&note.body);
-        *existing = note.clone();
-        Ok(note)
-    })
+fn save_note(note: Note, state: State<'_, AppState>) -> Result<Note, String> {
+    let command = Command::SaveNote {
+        id: note.id,
+        title: note.title,
+        body: note.body,
+        draft_revision: 0,
+    };
+    match execute_note_command(state, command)? {
+        CommandData::Saved { note, .. } => Ok(note),
+        _ => Err("The save-note command returned an unexpected result.".into()),
+    }
 }
 
 #[tauri::command]
@@ -210,21 +196,21 @@ fn set_note_state(
     value: bool,
     state: State<'_, AppState>,
 ) -> Result<Note, String> {
-    with_store(state, |store| {
-        let note = store
-            .notes
-            .iter_mut()
-            .find(|candidate| candidate.id == id)
-            .ok_or_else(|| "That note no longer exists.".to_string())?;
-        match field.as_str() {
-            "pinned" => note.pinned = value,
-            "archived" => note.archived = value,
-            "trashed" => note.trashed = value,
-            _ => return Err("Unsupported note state.".into()),
-        }
-        note.updated_at = now_millis();
-        Ok(note.clone())
-    })
+    let state_field = match field.as_str() {
+        "pinned" => NoteState::Pinned,
+        "archived" => NoteState::Archived,
+        "trashed" => NoteState::Trashed,
+        _ => return Err("Unsupported note state.".into()),
+    };
+    let command = Command::SetNoteState {
+        id,
+        state: state_field,
+        value,
+    };
+    match execute_note_command(state, command)? {
+        CommandData::StateChanged(note) => Ok(note),
+        _ => Err("The note-state command returned an unexpected result.".into()),
+    }
 }
 
 #[tauri::command]
@@ -596,6 +582,49 @@ fn main() {
 mod main_tests {
     use super::*;
     use crate::transfer::backup::{BackupInspection, PendingRestore};
+
+    #[test]
+    fn legacy_adapter_creates_saves_and_reopens_an_isolated_library() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::current_dir()
+            .unwrap()
+            .join("target")
+            .join(format!(
+                "legacy-command-test-{}-{nonce}",
+                std::process::id()
+            ));
+        let path = directory.join("notes.json");
+
+        let (created, _) = application_adapter::execute(&path, Command::CreateNote).unwrap();
+        let CommandData::Created(note) = created.data else {
+            panic!("create must return a note");
+        };
+        let _ = application_adapter::execute(
+            &path,
+            Command::SaveNote {
+                id: note.id.clone(),
+                title: "Reopened title".into(),
+                body: "Persisted body #integration".into(),
+                draft_revision: 12,
+            },
+        )
+        .unwrap();
+
+        let reopened = application_adapter::open_library(&path).unwrap().snapshot();
+        let saved = reopened
+            .store
+            .notes
+            .iter()
+            .find(|item| item.id == note.id)
+            .unwrap();
+        assert_eq!(saved.title, "Reopened title");
+        assert_eq!(saved.body, "Persisted body #integration");
+        assert_eq!(saved.tags, ["integration"]);
+        let _ = std::fs::remove_dir_all(directory);
+    }
 
     #[test]
     fn shared_resolver_matches_tauri_app_data_dir() {

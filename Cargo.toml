@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/domain", "crates/platform", "crates/storage"]
+members = [
+    "crates/application",
+    "crates/domain",
+    "crates/platform",
+    "crates/storage",
+]
 exclude = ["src-tauri"]
 resolver = "2"
 

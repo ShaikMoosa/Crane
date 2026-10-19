@@ -401,6 +401,7 @@ dependencies = [
 name = "crane"
 version = "0.1.0"
 dependencies = [
+ "crane-application",
  "crane-domain",
  "crane-platform",
  "crane-storage",
@@ -410,6 +411,13 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "crane-application"
+version = "0.1.0"
+dependencies = [
+ "crane-domain",
 ]
 
 [[package]]
@@ -424,6 +432,7 @@ dependencies = [
 name = "crane-platform"
 version = "0.1.0"
 dependencies = [
+ "crane-application",
  "dirs",
  "windows-sys 0.61.2",
 ]
@@ -432,6 +441,7 @@ dependencies = [
 name = "crane-storage"
 version = "0.1.0"
 dependencies = [
+ "crane-application",
  "crane-domain",
  "crane-platform",
  "serde_json",
