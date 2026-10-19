@@ -9,6 +9,9 @@ Crane is an original, Bear-inspired local Markdown notebook built with Tauri 2, 
 - Use nested inline tags such as `#work/research`
 - Pin, archive, trash, and restore notes
 - Toggle a safe Markdown preview
+- Import one or more UTF-8 `.md` files
+- Export the selected note or the active/archived library as ordinary Markdown
+- Create and restore complete `.crane-backup.json` backups, including archived and trashed notes
 - Switch between light and dark themes
 - Use `Ctrl+N` for a new note and `Ctrl+F` for search
 - Preview the UI in a browser with a localStorage-backed adapter
@@ -47,6 +50,18 @@ python -m http.server 4173
 ```
 
 The browser preview uses localStorage instead of the native JSON backend, but exercises the same interface and note logic.
+
+## Move and protect your notes
+
+Open **Data** at the bottom of the library rail to import Markdown, export the library, create a complete backup, or inspect a backup for restore. The selected note's action menu also contains **Export note**.
+
+- **Import Markdown** accepts one or more UTF-8 `.md` files. Imports create new active notes and never overwrite existing notes. If any selected file is invalid, none are imported.
+- **Export note** writes the selected active, archived, or trashed note as a readable `.md` file with its title as the first level-one heading.
+- **Export Library** creates a timestamped folder. Active notes go in `Notes/`, archived notes go in `Archive/`, and trashed notes are intentionally excluded.
+- **Create Backup** writes a versioned `.crane-backup.json` file containing every note and its metadata, including archive and trash state.
+- **Restore Backup** validates the selected backup and shows its date and note counts before asking for confirmation. Restore replaces the current library; Crane first writes an automatic `pre-restore-*.crane-backup.json` safety backup under its application-data `backups` directory.
+
+All transfers run locally and offline through native file and folder dialogs. Crane does not upload notes or grant the web interface general filesystem access. Cancelling a dialog changes nothing.
 
 ## Development workflow with Superpowers
 

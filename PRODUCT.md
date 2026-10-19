@@ -28,13 +28,16 @@ The application combines a calm three-pane writing environment with transparent 
 - Use `#tags` inside note bodies; browse and filter by those tags.
 - Search titles and note content.
 - Pin important notes, archive inactive notes, and move unwanted notes to trash.
+- Import UTF-8 Markdown, export individual notes or the usable library, and create or restore complete Crane backups from the Data menu at the bottom of the library rail.
 - Work offline. Notes persist under the operating system's application-data directory.
 
 ## Capabilities and Constraints
 
-- MVP: note CRUD, search, inline tag extraction, pinning, archive, trash and restore, Markdown-oriented editor, reading preview, keyboard shortcuts, responsive two/three-pane layout, light/dark themes, and seeded onboarding notes.
+- MVP: note CRUD, search, inline tag extraction, pinning, archive, trash and restore, Markdown-oriented editor, reading preview, Markdown import/export, complete backup/restore, keyboard shortcuts, responsive two/three-pane layout, light/dark themes, and seeded onboarding notes.
 - Native persistence is a JSON document written atomically by Rust. The model is intentionally small enough to migrate later to SQLite or individual Markdown files.
-- No sync, accounts, collaboration, encryption, attachments, OCR, or rich export in the MVP.
+- Markdown import accepts UTF-8 `.md` files up to the documented note and batch limits. Library export writes active notes under `Notes/`, archived notes under `Archive/`, and excludes trash; single-note export can explicitly export any selected note.
+- Complete `.crane-backup.json` backups preserve active, archived, and trashed notes with all metadata. Restore replaces the library only after validation, explicit confirmation, and an automatic pre-restore safety backup.
+- No sync, accounts, collaboration, encryption, attachments, OCR, PDF/document export, cloud destinations, or scheduled backups in the MVP.
 - No network access is required at runtime.
 - All frontend-to-native access uses narrow Tauri commands.
 
