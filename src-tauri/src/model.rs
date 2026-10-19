@@ -90,11 +90,15 @@ pub fn extract_tags(source: &str) -> Vec<String> {
         if !word.starts_with('#') || word.len() == 1 {
             continue;
         }
-        let raw = word[1..].trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-' && c != '/');
+        let raw = word[1..]
+            .trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-' && c != '/');
         if raw.is_empty() || raw.split('/').any(|segment| segment.is_empty()) {
             continue;
         }
-        if raw.chars().all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '/')) {
+        if raw
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '/'))
+        {
             let tag = raw.to_lowercase();
             if seen.insert(tag.clone()) {
                 tags.push(tag);
@@ -110,7 +114,10 @@ mod tests {
 
     #[test]
     fn extracts_unique_nested_tags() {
-        assert_eq!(extract_tags("#Design and #work/Notes, then #design"), vec!["design", "work/notes"]);
+        assert_eq!(
+            extract_tags("#Design and #work/Notes, then #design"),
+            vec!["design", "work/notes"]
+        );
     }
 
     #[test]
@@ -120,4 +127,3 @@ mod tests {
         assert!(validate_note(&note).is_err());
     }
 }
-
