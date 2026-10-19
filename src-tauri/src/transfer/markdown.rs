@@ -1,5 +1,6 @@
 use super::TransferError;
 use crate::model::{extract_tags, validate_note, Note, Store};
+use serde::Serialize;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -26,7 +27,8 @@ pub struct ExportManifest {
     pub entries: Vec<ExportEntry>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportSummary {
     pub exported_count: usize,
     pub folder_name: String,
@@ -66,6 +68,10 @@ pub fn serialize_markdown(note: &Note) -> String {
         note.title.as_str()
     };
     format!("# {title}\n\n{}", note.body)
+}
+
+pub fn suggested_markdown_filename(note: &Note) -> String {
+    format!("{}.md", sanitize_filename_stem(&note.title))
 }
 
 pub fn prepare_import(

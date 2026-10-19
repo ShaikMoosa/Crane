@@ -138,7 +138,7 @@ pub fn write_backup(path: &Path, envelope: &BackupEnvelope) -> Result<(), Transf
         return Err(TransferError::BackupVersion(envelope.backup_version));
     }
     validate_store(&envelope.store).map_err(TransferError::Validation)?;
-    let bytes = serialize_envelope(envelope)?;
+    let bytes = serialize_backup(&envelope.store, envelope.created_at, &envelope.app_version)?;
     write_atomic_bytes(path, &bytes).map_err(TransferError::Io)
 }
 
