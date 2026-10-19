@@ -61,6 +61,22 @@ function makeId() {
   return globalThis.crypto?.randomUUID?.() || `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeTransferOutcome(outcome) {
+  if (outcome?.status === "cancelled") return { status: "cancelled", data: outcome.data ?? null };
+  return outcome;
+}
+
+async function runTransfer(command, adapterMethod, args = [], payload) {
+  if (isNative()) {
+    return normalizeTransferOutcome(await window.__TAURI__.core.invoke(command, payload));
+  }
+  const adapter = globalThis.__CRANE_PREVIEW_TRANSFER__;
+  if (typeof adapter?.[adapterMethod] !== "function") {
+    return { status: "cancelled", data: null };
+  }
+  return normalizeTransferOutcome(await adapter[adapterMethod](...args));
+}
+
 export const bridge = {
   async bootstrap() {
     if (isNative()) return window.__TAURI__.core.invoke("bootstrap");
@@ -107,6 +123,30 @@ export const bridge = {
     store.notes[index] = { ...store.notes[index], [field]: Boolean(value), updatedAt: Date.now() };
     saveLocal(store);
     return structuredClone(store.notes[index]);
+  },
+
+  async importMarkdown() {
+    return runTransfer("import_markdown", "importMarkdown");
+  },
+
+  async exportNote(id) {
+    return runTransfer("export_note", "exportNote", [id], { id });
+  },
+
+  async exportLibrary() {
+    return runTransfer("export_library", "exportLibrary");
+  },
+
+  async createBackup() {
+    return runTransfer("create_backup", "createBackup");
+  },
+
+  async inspectBackup() {
+    return runTransfer("inspect_backup", "inspectBackup");
+  },
+
+  async restoreBackup(token) {
+    return runTransfer("restore_backup", "restoreBackup", [token], { confirmationToken: token });
   },
 };
 
