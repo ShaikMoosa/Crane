@@ -28,6 +28,7 @@ test("native transfer methods dispatch narrow command arguments", async () => {
   await bridge.createBackup();
   await bridge.inspectBackup();
   await bridge.restoreBackup("restore-token");
+  await bridge.cancelRestore("cancel-token");
 
   assert.deepEqual(calls, [
     ["import_markdown", undefined],
@@ -36,13 +37,14 @@ test("native transfer methods dispatch narrow command arguments", async () => {
     ["create_backup", undefined],
     ["inspect_backup", undefined],
     ["restore_backup", { confirmationToken: "restore-token" }],
+    ["cancel_restore", { confirmationToken: "cancel-token" }],
   ]);
 });
 
 test("preview transfer methods delegate to the injected adapter", async () => {
   const calls = [];
   const adapter = Object.fromEntries(
-    ["importMarkdown", "exportNote", "exportLibrary", "createBackup", "inspectBackup", "restoreBackup"].map(
+    ["importMarkdown", "exportNote", "exportLibrary", "createBackup", "inspectBackup", "restoreBackup", "cancelRestore"].map(
       (name) => [
         name,
         async (...args) => {
@@ -60,6 +62,7 @@ test("preview transfer methods delegate to the injected adapter", async () => {
   await bridge.createBackup();
   await bridge.inspectBackup();
   await bridge.restoreBackup("token-3");
+  await bridge.cancelRestore("token-4");
 
   assert.deepEqual(calls, [
     ["importMarkdown"],
@@ -68,6 +71,7 @@ test("preview transfer methods delegate to the injected adapter", async () => {
     ["createBackup"],
     ["inspectBackup"],
     ["restoreBackup", "token-3"],
+    ["cancelRestore", "token-4"],
   ]);
 });
 

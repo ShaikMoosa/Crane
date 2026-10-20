@@ -58,12 +58,14 @@ impl LibraryRepository for FakeRepository {
     }
 }
 
+#[allow(dead_code)]
 pub struct FakeEnvironment {
     now_ms: u64,
     monotonic_ms: u64,
     next_id: u64,
 }
 
+#[allow(dead_code)]
 impl FakeEnvironment {
     pub fn new(now_ms: u64, monotonic_ms: u64) -> Self {
         Self {

@@ -65,6 +65,10 @@ pub fn serialize_markdown(note: &Note) -> String {
     format!("# {title}\n\n{}", note.body)
 }
 
+pub fn suggested_markdown_filename(note: &Note) -> String {
+    format!("{}.md", sanitize_filename_stem(&note.title))
+}
+
 pub fn prepare_import(
     files: Vec<NamedBytes>,
     timestamp: u64,

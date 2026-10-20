@@ -30,19 +30,20 @@ This matrix records the behavior protected by the released Tauri/DOM implementat
 | `data-ui: restore confirmation is a labelled semantic dialog` | Replace DOM assertion with **NA-04** |
 | `data-ui: compact transfer controls preserve 44 pixel targets` | Replace CSS assertion with **NA-02** |
 | `data-ui: busy transfers block note mutations until their store snapshot completes` | Replace JavaScript state assertion with **NA-03** |
-| `data-ui: restore replacement cannot be dismissed after commit starts` | Replace JavaScript dialog assertion with **NA-04** |
+| `data-ui: restore replacement cannot be dismissed after commit starts` | Legacy assertion retained; shared lifecycle coverage is `restore_requires_fresh_unrevoked_confirmation`, then native widget behavior remains **NA-04** |
+| `data-ui: closing restore confirmation revokes its one-use token` | Legacy bridge assertion plus `restore_requires_fresh_unrevoked_confirmation`; native dialog behavior remains **NA-04** |
 | `transfer-controller: flushes_before_import_and_restore` | `application::failed_create_save_and_state_changes_preserve_committed_store`, plus native transfer sequencing in **NA-03** and **NA-04** |
 | `transfer-controller: aborts_when_pending_save_fails` | `application::failed_create_save_and_state_changes_preserve_committed_store`, then **NA-03** |
 | `transfer-controller: cancellation_is_silent` | Replace browser cancellation assertion with **NA-05** |
-| `transfer-controller: completed_import_replaces_store_and_reports_count` | Domain import coverage in `markdown::imports_heading_as_title_and_preserves_body`; transactional replacement/count presentation remains **NA-03** |
-| `transfer-controller: completed_restore_replaces_store` | `backup::backup_builder_counts_every_note_state`; transactional replacement remains **NA-04** |
+| `transfer-controller: completed_import_replaces_store_and_reports_count` | `failed_import_adds_zero_notes`, `legacy_adapter_transfer_path_uses_shared_application`, and domain import coverage; native presentation remains **NA-03** |
+| `transfer-controller: completed_restore_replaces_store` | `backup::backup_builder_counts_every_note_state`, `safety_failure_skips_replacement`, and `replacement_failure_keeps_memory_and_disk`; native presentation remains **NA-04** |
 | `transfer-controller: errors_unlock_controls` | Replace JavaScript state assertion with **NA-03** |
 | `transfer-controller: native string errors stay visible to the user` | Replace bridge-specific assertion with **NA-05** |
 | `transfer-controller: duplicate_activation_while_busy_is_ignored` | Replace JavaScript state assertion with **NA-03** |
 | `transfer-controller: inspection_alone_never_restores` | **NA-04** |
-| `transfer-controller: cancel_never_calls_restoreBackup` | **NA-04** |
-| `transfer-controller: confirm passes exactly the inspected token` | **NA-04** |
-| `transfer-controller: expired token error leaves existing state untouched` | **NA-04** |
+| `transfer-controller: cancel_never_calls_restoreBackup` | `restore_requires_fresh_unrevoked_confirmation`, plus native widget behavior in **NA-04** |
+| `transfer-controller: confirm passes exactly the inspected token` | `restore_requires_fresh_unrevoked_confirmation`, plus native widget behavior in **NA-04** |
+| `transfer-controller: expired token error leaves existing state untouched` | `restore_requires_fresh_unrevoked_confirmation` and `replacement_failure_keeps_memory_and_disk` |
 | `transfer-bridge: native transfer methods dispatch narrow command arguments` | Replace Tauri IPC assertion with **NA-06** |
 | `transfer-bridge: preview transfer methods delegate to the injected adapter` | Browser-preview adapter is retired; native dialog delegation is covered by **NA-05** and **NA-06** |
 | `transfer-bridge: missing preview adapter returns a normalized cancelled outcome` | Browser-only behavior is retired; native cancellation is covered by **NA-05** |
@@ -60,29 +61,29 @@ This matrix records the behavior protected by the released Tauri/DOM implementat
 | `main::legacy_adapter_creates_saves_and_reopens_an_isolated_library` | Retained during migration; application coverage is `create_commits_once_and_publishes_after_success`, `save_updates_owned_fields_and_preserves_identity_extensions_and_flags`, and storage coverage is `repository_round_trip_preserves_supported_extensions` |
 | `main::shared_resolver_matches_tauri_app_data_dir` | `platform::legacy_data_dir_uses_the_roaming_root_and_identifier`, then **NA-01** |
 | `main::cancelled_outcome_serializes_without_data` | Tauri response shape is retired; native cancellation remains **NA-05** |
-| `main::restore_token_is_single_use` | **NA-04** |
-| `main::stale_restore_token_is_rejected` | **NA-04** |
-| `main::formats_export_timestamp_in_utc` | Pending native export naming acceptance in **NA-07** |
+| `main::restore_token_is_single_use` | `restore_requires_fresh_unrevoked_confirmation` |
+| `main::stale_restore_token_is_rejected` | `restore_requires_fresh_unrevoked_confirmation` |
+| `main::formats_export_timestamp_in_utc` | Shared storage adapter formatting exercised by export tests; native picker presentation remains **NA-07** |
 | `main::bounded_reader_rejects_before_retaining_bytes_past_the_limit` | `storage::bounded_reader_stops_at_limit_plus_one` |
-| `main::normalized_backup_targets_that_exist_require_confirmation` | **NA-05** |
+| `main::normalized_backup_targets_that_exist_require_confirmation` | `normalized_existing_backup_target_requires_confirmation`; native dialog acceptance remains **NA-05** |
 | `backup::backup_round_trip_preserves_all_note_states` | `backups::backup_builder_counts_every_note_state` and `backups::version_one_backup_round_trip_preserves_all_unknown_fields` |
 | `backup::rejects_wrong_format_and_future_versions` | `backups::malformed_future_and_oversized_backups_are_rejected` |
-| `backup::rejects_duplicate_ids_and_invalid_notes` | Domain store validation in `domain::blank_and_duplicate_ids_are_rejected` and `domain::title_and_body_limits_are_exact_utf8_byte_limits`; backup boundary validation remains exercised by the retained legacy test until Task 5 delegates it |
+| `backup::rejects_duplicate_ids_and_invalid_notes` | Domain validation plus `inspection_reports_domain_counts`; inspection delegates through `inspect_backup` before confirmation state is created |
 | `backup::rejects_backup_over_256_mib_before_json_parse` | `backups::malformed_future_and_oversized_backups_are_rejected` |
-| `backup::refuses_to_create_a_backup_larger_than_the_restore_limit` | Retained legacy Rust test until Task 5 delegates serialization; the domain serializer applies the same 256 MiB limit |
+| `backup::refuses_to_create_a_backup_larger_than_the_restore_limit` | `backup_size_is_checked_before_any_target_is_published` through the bounded serializer |
 | `backup::rejects_an_unrenderable_backup_envelope_timestamp` | `backups::invalid_backup_timestamp_is_rejected` |
-| `backup::writes_safety_backup_before_replacement` | **NA-04** and Task 5 adapter transaction tests |
-| `backup::safety_failure_skips_replacement` | **NA-04** and Task 5 adapter transaction tests |
-| `backup::replacement_failure_returns_error_without_new_in_memory_store` | `application::failed_create_save_and_state_changes_preserve_committed_store`, **NA-04**, and Task 5 adapter transaction tests |
+| `backup::writes_safety_backup_before_replacement` | `safety_failure_skips_replacement` and `replacement_failure_keeps_memory_and_disk` |
+| `backup::safety_failure_skips_replacement` | `safety_failure_skips_replacement` |
+| `backup::replacement_failure_returns_error_without_new_in_memory_store` | `replacement_failure_keeps_memory_and_disk` |
 | `markdown::round_trips_title_and_body` | `markdown::imports_heading_as_title_and_preserves_body` |
 | `markdown::uses_filename_when_h1_is_absent` | `markdown::import_uses_filename_when_h1_is_absent` |
 | `markdown::rejects_non_utf8_and_oversized_inputs` | `markdown::rejects_non_utf8_and_oversized_batches` |
 | `markdown::rejects_the_entire_batch_when_one_file_fails` | `markdown::invalid_file_aborts_the_entire_batch` |
 | `markdown::builds_notes_and_archive_manifests_without_trash` | `markdown::export_manifest_separates_active_and_archive_and_excludes_trash` |
 | `markdown::sanitizes_reserved_case_insensitive_filename_collisions` | `markdown::export_names_are_windows_safe_and_collision_resistant` |
-| `markdown::duplicate_manifest_paths_abort_instead_of_overwriting_an_export` | **NA-07** and Task 5 adapter transaction tests |
+| `markdown::duplicate_manifest_paths_abort_instead_of_overwriting_an_export` | Exclusive `create_new` entries in `write_library_export_with`; native acceptance remains **NA-07** |
 | `markdown::rejects_a_batch_larger_than_the_limit` | `markdown::rejects_non_utf8_and_oversized_batches` |
-| `markdown::does_not_publish_partial_export_when_a_write_fails` | **NA-07** and Task 5 adapter transaction tests |
+| `markdown::does_not_publish_partial_export_when_a_write_fails` | `failed_library_export_keeps_unrelated_siblings_and_hides_final_folder` |
 
 ## Deliberate compatibility decisions
 

@@ -148,5 +148,9 @@ export const bridge = {
   async restoreBackup(token) {
     return runTransfer("restore_backup", "restoreBackup", [token], { confirmationToken: token });
   },
+
+  async cancelRestore(token) {
+    return runTransfer("cancel_restore", "cancelRestore", [token], { confirmationToken: token });
+  },
 };
 

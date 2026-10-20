@@ -46,3 +46,8 @@ test("restore replacement cannot be dismissed after commit starts", () => {
   assert.match(app, /ui\.cancelRestore\.disabled\s*=\s*transfers\.busy/);
   assert.match(app, /restoreDialog\.addEventListener\("cancel",[\s\S]*?if \(transfers\.busy\) event\.preventDefault\(\)/);
 });
+
+test("closing restore confirmation revokes its one-use token", () => {
+  assert.match(app, /restoreDialog\.returnValue\s*=\s*""/);
+  assert.match(app, /bridge\.cancelRestore\(token\)/);
+});

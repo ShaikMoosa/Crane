@@ -1,6 +1,7 @@
 use crate::{validate_store, Store, ValidationCode, ValidationError, MAX_RENDERABLE_TIMESTAMP};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::io::{self, Write};
 
 pub const BACKUP_FORMAT: &str = "crane-backup";
 pub const BACKUP_VERSION: u32 = 1;
@@ -45,17 +46,26 @@ pub fn make_backup(
 }
 
 pub fn serialize_backup(envelope: &BackupEnvelope) -> Result<Vec<u8>, ValidationError> {
+    serialize_backup_with_limit(envelope, MAX_BACKUP_BYTES)
+}
+
+pub fn serialize_backup_with_limit(
+    envelope: &BackupEnvelope,
+    byte_limit: usize,
+) -> Result<Vec<u8>, ValidationError> {
     validate_envelope(envelope)?;
-    let bytes = serde_json::to_vec_pretty(envelope).map_err(|error| {
-        ValidationError::new(
-            ValidationCode::InvalidBackup,
-            format!("Could not serialize the backup: {error}"),
-        )
-    })?;
-    if bytes.len() > MAX_BACKUP_BYTES {
-        return Err(backup_size_error());
+    let mut writer = LimitedWriter::new(byte_limit);
+    if let Err(error) = serde_json::to_writer_pretty(&mut writer, envelope) {
+        return if writer.exceeded {
+            Err(backup_size_error())
+        } else {
+            Err(ValidationError::new(
+                ValidationCode::InvalidBackup,
+                format!("Could not serialize the backup: {error}"),
+            ))
+        };
     }
-    Ok(bytes)
+    Ok(writer.bytes)
 }
 
 pub fn inspect_backup(bytes: &[u8]) -> Result<(BackupEnvelope, BackupInspection), ValidationError> {
@@ -126,4 +136,35 @@ fn backup_size_error() -> ValidationError {
         ValidationCode::BackupTooLarge,
         "The backup exceeds the 256 MB limit.",
     )
+}
+
+struct LimitedWriter {
+    bytes: Vec<u8>,
+    limit: usize,
+    exceeded: bool,
+}
+
+impl LimitedWriter {
+    fn new(limit: usize) -> Self {
+        Self {
+            bytes: Vec::with_capacity(limit.min(64 * 1024)),
+            limit,
+            exceeded: false,
+        }
+    }
+}
+
+impl Write for LimitedWriter {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.bytes.len().saturating_add(buffer.len()) > self.limit {
+            self.exceeded = true;
+            return Err(io::Error::other("backup byte limit exceeded"));
+        }
+        self.bytes.extend_from_slice(buffer);
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }

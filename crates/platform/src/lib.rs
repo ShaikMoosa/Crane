@@ -1,4 +1,5 @@
 mod atomic_replace;
+mod dialogs;
 mod environment;
 mod instance;
 mod paths;
@@ -6,6 +7,7 @@ mod paths;
 use std::fmt::{Display, Formatter};
 
 pub use atomic_replace::{replace_atomic, validate_destructive_path};
+pub use dialogs::{DialogProvider, DialogSelection, NativeDialogs};
 pub use environment::SystemEnvironment;
 pub use instance::LibraryGuard;
 pub use paths::resolve_legacy_data_dir;

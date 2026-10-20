@@ -214,6 +214,7 @@ function showRestoreDialog(inspection) {
   ui.restoreActive.textContent = String(inspection.active);
   ui.restoreArchived.textContent = String(inspection.archived);
   ui.restoreTrashed.textContent = String(inspection.trashed);
+  ui.restoreDialog.returnValue = "";
   ui.restoreDialog.showModal();
   ui.cancelRestore.focus();
 }
@@ -311,6 +312,10 @@ ui.restoreDialog.addEventListener("cancel", (event) => {
   if (transfers.busy) event.preventDefault();
 });
 ui.restoreDialog.addEventListener("close", () => {
+  const token = state.restoreToken;
+  if (token && (ui.restoreDialog.returnValue === "cancel" || !ui.restoreDialog.returnValue)) {
+    void bridge.cancelRestore(token).catch(() => {});
+  }
   state.restoreToken = null;
   restoreInvoker?.focus();
   restoreInvoker = null;
