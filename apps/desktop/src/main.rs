@@ -1,7 +1,7 @@
 use crane_application::Library;
 use crane_desktop::app::CraneApp;
 use crane_platform::SystemEnvironment;
-use crane_storage::JsonRepository;
+use crane_storage::{load_settings, JsonRepository};
 use eframe::egui;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -22,6 +22,9 @@ fn run() -> Result<(), String> {
     let library = Library::open(Box::new(repository), Box::new(SystemEnvironment::new()))
         .map_err(|error| error.message)?;
     let snapshot = library.snapshot();
+    let settings_path = root.join("settings.json");
+    let settings = load_settings(&settings_path)
+        .map_err(|error| format!("Could not load native settings: {error}"))?;
 
     let options = eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
@@ -43,9 +46,11 @@ fn run() -> Result<(), String> {
                     adapter.name, adapter.backend, adapter.device_type
                 );
             }
-            Ok(Box::new(CraneApp::new(
+            Ok(Box::new(CraneApp::new_with_settings(
                 library,
                 snapshot,
+                settings,
+                settings_path,
                 creation.egui_ctx.clone(),
             )))
         }),

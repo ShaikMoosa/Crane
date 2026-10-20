@@ -195,6 +195,14 @@ Spacing is compact and repeated rather than theatrical: 3px between grouped cont
 
 **The Pane Continuity Rule.** Separate regions with rules and surface shifts, never with a dashboard of detached cards.
 
+### Native Rust translation
+
+The egui/eframe interface keeps the 236-point library rail and 330-point note list in wide mode. From 681 through 900 points it uses a 72-point rail and 290-point list. At 680 points and below it presents one native pane at a time with named `Back to notes` and `Open library` controls; the shipped Windows window still has the approved 720-point minimum, while the smaller state remains covered in the UI harness.
+
+Native controls use egui's platform accessibility tree and persistent `TextEdit` state. The title and body strings live in the active draft and are not reconstructed during a frame, preserving cursor, selection, IME composition, clipboard, and undo state managed by egui. Crane requests local system fonts through eframe's `system_fonts` support and retains egui's licensed built-in fallback; it does not package or redistribute Georgia, Times New Roman, Segoe UI, or Arial.
+
+Native rendering follows the palette, type roles, spacing, small-corner vocabulary, and three-material hierarchy above. Point-based metrics adapt to the operating system's scale factor; this is a semantic design translation, not a claim of pixel identity with the retired DOM renderer.
+
 ## Elevation & Depth
 
 The system is flat by default. Pane hierarchy comes from adjacent tonal surfaces and one-pixel rules; shadow is reserved for transient or action-oriented elements. The create button uses a soft ember cast, the action menu uses a compact lifted shadow, the toast uses a stronger overlay shadow, and the empty paper glyph uses a crisp offset sheet. Dark mode removes the general ambient shadow token.

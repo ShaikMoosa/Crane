@@ -1,35 +1,329 @@
 use crate::draft::{Draft, DraftCoordinator};
-use crate::view_state::ViewState;
-use crate::worker::{spawn_worker, WorkerHandle};
-use crane_application::{ErrorCode, Library, LibrarySnapshot};
+use crate::settings::SettingsController;
+use crate::theme;
+use crate::view_state::{layout_mode, LayoutMode, ViewState};
+use crate::views::{editor, library, note_list};
+use crate::worker::{spawn_worker, WorkerHandle, WorkerRequest, WorkerResult};
+use crane_application::{
+    AppError, Command, CommandData, ErrorCode, Library, LibrarySnapshot, NoteState,
+};
+use crane_domain::{
+    parse_preview, query_note_ids, Collection, MarkdownDocument, Note, NoteFilter, Store,
+};
+use crane_storage::{NativeSettings, ThemeChoice};
 use eframe::egui;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Instant;
+
+const GENERIC_REQUEST_START: u64 = 1 << 63;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheStats {
+    pub query_recomputes: u64,
+    pub preview_recomputes: u64,
+}
+
+#[derive(Default)]
+struct QueryCache {
+    key: Option<(u64, NoteFilter)>,
+    ids: Vec<String>,
+}
+
+#[derive(Default)]
+struct PreviewCache {
+    key: Option<(String, u64)>,
+    document: Option<MarkdownDocument>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MobilePane {
+    Library,
+    NoteList,
+    Editor,
+}
+
+enum DeferredAction {
+    Create,
+    Select(String),
+    ChangeFilter {
+        collection: Collection,
+        tag: Option<String>,
+    },
+    SetState {
+        id: String,
+        state: NoteState,
+        value: bool,
+    },
+    Mobile(MobilePane),
+    FocusSearch,
+}
+
+#[derive(Clone, Copy)]
+enum PendingCommand {
+    Create,
+    SetState,
+}
 
 pub struct CraneApp {
     draft: Option<DraftCoordinator>,
     worker: WorkerHandle,
+    store: Store,
+    store_revision: u64,
     view: ViewState,
+    settings: SettingsController,
+    applied_theme: Option<ThemeChoice>,
     started_at: Instant,
+    next_request_id: u64,
+    pending_requests: HashMap<u64, PendingCommand>,
+    deferred_action: Option<DeferredAction>,
+    query_cache: QueryCache,
+    preview_cache: PreviewCache,
+    cache_stats: CacheStats,
+    request_title_focus: bool,
+    request_search_focus: bool,
+    mobile_pane: MobilePane,
+    saved_at: Option<Instant>,
+    fonts_configured: bool,
 }
 
 impl CraneApp {
     pub fn new(library: Library, snapshot: LibrarySnapshot, context: egui::Context) -> Self {
-        let draft = snapshot.store.notes.first().map(|note| {
-            DraftCoordinator::new(Draft {
-                note_id: note.id.clone(),
-                title: note.title.clone(),
-                body: note.body.clone(),
-                revision: 0,
-                acknowledged_revision: 0,
-            })
-        });
         let wake_context = context.clone();
-        let worker = spawn_worker(library, Box::new(move || wake_context.request_repaint()));
+        Self::new_with_settings_and_wake(
+            library,
+            snapshot,
+            NativeSettings::default(),
+            None,
+            Box::new(move || wake_context.request_repaint()),
+        )
+    }
+
+    pub fn new_with_settings(
+        library: Library,
+        snapshot: LibrarySnapshot,
+        settings: NativeSettings,
+        settings_path: PathBuf,
+        context: egui::Context,
+    ) -> Self {
+        let wake_context = context.clone();
+        Self::new_with_settings_and_wake(
+            library,
+            snapshot,
+            settings,
+            Some(settings_path),
+            Box::new(move || wake_context.request_repaint()),
+        )
+    }
+
+    pub fn new_with_wake(
+        library: Library,
+        snapshot: LibrarySnapshot,
+        wake: Box<dyn Fn() + Send>,
+    ) -> Self {
+        Self::new_with_settings_and_wake(library, snapshot, NativeSettings::default(), None, wake)
+    }
+
+    fn new_with_settings_and_wake(
+        library: Library,
+        snapshot: LibrarySnapshot,
+        settings: NativeSettings,
+        settings_path: Option<PathBuf>,
+        wake: Box<dyn Fn() + Send>,
+    ) -> Self {
+        let initial_filter = NoteFilter {
+            collection: Collection::Notes,
+            tag: None,
+            query: String::new(),
+        };
+        let selected_id = query_note_ids(&snapshot.store, &initial_filter)
+            .into_iter()
+            .next();
+        let draft = selected_id.as_deref().and_then(|id| {
+            snapshot
+                .store
+                .notes
+                .iter()
+                .find(|note| note.id == id)
+                .map(draft_from_note)
+        });
+        let mobile_pane = if draft.is_some() {
+            MobilePane::Editor
+        } else {
+            MobilePane::Library
+        };
+        let worker = spawn_worker(library, wake);
         Self {
-            draft,
+            draft: draft.map(DraftCoordinator::new),
             worker,
-            view: ViewState::default(),
+            store: snapshot.store,
+            store_revision: snapshot.revision,
+            view: ViewState {
+                selected_id,
+                ..ViewState::default()
+            },
+            settings: SettingsController::new(settings, settings_path),
+            applied_theme: None,
             started_at: Instant::now(),
+            next_request_id: GENERIC_REQUEST_START,
+            pending_requests: HashMap::new(),
+            deferred_action: None,
+            query_cache: QueryCache::default(),
+            preview_cache: PreviewCache::default(),
+            cache_stats: CacheStats::default(),
+            request_title_focus: false,
+            request_search_focus: false,
+            mobile_pane,
+            saved_at: None,
+            fonts_configured: false,
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        self.poll_worker();
+        self.expire_saved_status(ui.ctx());
+        if !self.fonts_configured {
+            theme::install_local_fonts(ui.ctx());
+            self.fonts_configured = true;
+        }
+        self.apply_theme(ui.ctx());
+        self.handle_shortcuts(ui.ctx());
+
+        let mode = layout_mode(ui.available_width());
+        if mode == LayoutMode::SinglePane {
+            match self.mobile_pane {
+                MobilePane::Library => {
+                    theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
+                    self.show_library(ui, false);
+                }
+                MobilePane::NoteList => {
+                    theme::paint_pane(ui, theme::PaneKind::NoteList, self.settings.value().theme);
+                    if ui.button("Open library").clicked() {
+                        self.mobile_pane = MobilePane::Library;
+                    }
+                    self.show_note_list(ui);
+                }
+                MobilePane::Editor => {
+                    theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
+                    if ui.button("Back to notes").clicked() {
+                        self.request_after_save(DeferredAction::Mobile(MobilePane::NoteList));
+                    }
+                    self.show_editor(ui);
+                }
+            }
+        } else {
+            ui.horizontal(|ui| {
+                let rail_width = if mode == LayoutMode::Wide {
+                    theme::RAIL_WIDTH
+                } else {
+                    theme::COLLAPSED_RAIL_WIDTH
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(rail_width, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
+                        self.show_library(ui, mode == LayoutMode::CollapsedRail);
+                    },
+                );
+                ui.separator();
+                let list_width = if mode == LayoutMode::Wide {
+                    theme::NOTE_LIST_WIDTH
+                } else {
+                    theme::COLLAPSED_NOTE_LIST_WIDTH
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(list_width, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        theme::paint_pane(
+                            ui,
+                            theme::PaneKind::NoteList,
+                            self.settings.value().theme,
+                        );
+                        self.show_note_list(ui);
+                    },
+                );
+                ui.separator();
+                ui.allocate_ui_with_layout(
+                    ui.available_size(),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
+                        self.show_editor(ui);
+                    },
+                );
+            });
+        }
+        self.dispatch_ready_save();
+        self.advance_deferred_action();
+    }
+
+    pub fn visible_note_ids(&mut self) -> &[String] {
+        let key = (self.store_revision, self.view.filter());
+        if self.query_cache.key.as_ref() != Some(&key) {
+            self.query_cache.ids = query_note_ids(&self.store, &key.1);
+            self.query_cache.key = Some(key);
+            self.cache_stats.query_recomputes = self.cache_stats.query_recomputes.saturating_add(1);
+        }
+        &self.query_cache.ids
+    }
+
+    pub fn cache_stats(&self) -> CacheStats {
+        self.cache_stats
+    }
+
+    pub fn set_query(&mut self, query: impl Into<String>) {
+        self.view.query = query.into();
+    }
+
+    pub fn selected_note_id(&self) -> Option<&str> {
+        self.view.selected_id.as_deref()
+    }
+
+    pub fn selected_draft(&self) -> Option<&Draft> {
+        self.draft.as_ref().map(DraftCoordinator::current)
+    }
+
+    pub fn status(&self) -> Option<&str> {
+        self.view.status.as_deref()
+    }
+
+    pub fn save_now(&mut self) {
+        if let Some(draft) = &mut self.draft {
+            draft.save_now();
+        }
+        self.dispatch_ready_save();
+    }
+
+    pub fn has_pending_work(&self) -> bool {
+        !self.pending_requests.is_empty()
+            || self.deferred_action.is_some()
+            || self
+                .draft
+                .as_ref()
+                .is_some_and(DraftCoordinator::has_pending_work)
+    }
+
+    pub fn edit_selected_for_test(&mut self, title: &str, body: &str) {
+        let now = self.now_millis();
+        if let Some(draft) = &mut self.draft {
+            draft.edit(title.into(), body.into(), now);
+        }
+    }
+
+    pub fn simulate_save_failure_for_test(&mut self, message: &str) {
+        let now = self.now_millis();
+        let Some(draft) = &mut self.draft else {
+            return;
+        };
+        draft.save_now();
+        if let Some(request) = draft.take_ready_request(now) {
+            draft.complete_failure(
+                request.request_id,
+                AppError::new(ErrorCode::Io, message.to_owned()),
+            );
+            self.view.status = Some(message.to_owned());
         }
     }
 
@@ -37,16 +331,251 @@ impl CraneApp {
         self.started_at.elapsed().as_millis() as u64
     }
 
-    fn poll_worker(&mut self) {
-        while let Some(result) = self.worker.try_recv() {
-            if let Some(draft) = self.draft.as_mut() {
-                draft.complete(result);
-                self.view.status = draft
-                    .last_error()
-                    .map(|error| error.message.clone())
-                    .or_else(|| Some("Saved".into()));
+    fn show_library(&mut self, ui: &mut egui::Ui, collapsed: bool) {
+        let actions = library::show(
+            ui,
+            &self.store,
+            self.view.collection,
+            self.view.tag.as_deref(),
+            self.settings.value().theme,
+            self.settings.value().reduced_motion,
+            collapsed,
+        );
+        if actions.create {
+            self.request_after_save(DeferredAction::Create);
+        } else if let Some(collection) = actions.collection {
+            self.request_after_save(DeferredAction::ChangeFilter {
+                collection,
+                tag: actions.tag.unwrap_or(None),
+            });
+        }
+        if actions.toggle_theme {
+            let mut candidate = self.settings.value().clone();
+            candidate.theme = match candidate.theme {
+                ThemeChoice::Dark => ThemeChoice::Light,
+                ThemeChoice::Light => ThemeChoice::Dark,
+            };
+            self.persist_settings(candidate);
+        }
+        if let Some(value) = actions.reduced_motion {
+            let mut candidate = self.settings.value().clone();
+            candidate.reduced_motion = value;
+            self.persist_settings(candidate);
+        }
+    }
+
+    fn show_note_list(&mut self, ui: &mut egui::Ui) {
+        let visible = self.visible_note_ids().to_vec();
+        let previous_query = self.view.query.clone();
+        let selected = note_list::show(
+            ui,
+            &self.store,
+            &visible,
+            self.view.selected_id.as_deref(),
+            &mut self.view.query,
+            std::mem::take(&mut self.request_search_focus),
+        );
+        if self.view.query != previous_query {
+            self.query_cache.key = None;
+        }
+        if let Some(id) = selected {
+            self.request_after_save(DeferredAction::Select(id));
+        }
+    }
+
+    fn show_editor(&mut self, ui: &mut egui::Ui) {
+        let Some(selected_id) = self.view.selected_id.clone() else {
+            ui.heading("A quiet place for bright ideas");
+            if ui.button("New note").clicked() {
+                self.request_after_save(DeferredAction::Create);
+            }
+            return;
+        };
+        let Some(note) = self
+            .store
+            .notes
+            .iter()
+            .find(|note| note.id == selected_id)
+            .cloned()
+        else {
+            ui.label("This note is no longer available.");
+            return;
+        };
+        let preview_document = if self.view.preview {
+            self.preview_document().cloned()
+        } else {
+            None
+        };
+        let request_focus = std::mem::take(&mut self.request_title_focus);
+        let status = self.view.status.clone();
+        let now = self.now_millis();
+        let mutation_enabled = self.pending_requests.is_empty();
+        let Some(draft) = &mut self.draft else {
+            return;
+        };
+        let actions = ui
+            .add_enabled_ui(mutation_enabled, |ui| {
+                editor::show(
+                    ui,
+                    draft,
+                    editor::NoteFlags {
+                        pinned: note.pinned,
+                        archived: note.archived,
+                        trashed: note.trashed,
+                    },
+                    self.view.preview,
+                    preview_document.as_ref(),
+                    request_focus,
+                    status.as_deref(),
+                )
+            })
+            .inner;
+        if actions.changed {
+            draft.mark_edited(now);
+            self.preview_cache.key = None;
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(
+                    crate::draft::SAVE_DELAY_MILLIS,
+                ));
+        }
+        if actions.save_now {
+            draft.save_now();
+        }
+        if actions.retry {
+            draft.retry();
+        }
+        if actions.toggle_preview {
+            self.view.preview = !self.view.preview;
+        }
+        if let Some(error) = actions.link_error {
+            self.view.status = Some(error);
+        }
+        if actions.toggle_pin {
+            self.request_after_save(DeferredAction::SetState {
+                id: selected_id.clone(),
+                state: NoteState::Pinned,
+                value: !note.pinned,
+            });
+        }
+        if actions.toggle_archive {
+            self.request_after_save(DeferredAction::SetState {
+                id: selected_id.clone(),
+                state: NoteState::Archived,
+                value: !note.archived,
+            });
+        }
+        if actions.toggle_trash {
+            self.request_after_save(DeferredAction::SetState {
+                id: selected_id,
+                state: NoteState::Trashed,
+                value: !note.trashed,
+            });
+        }
+    }
+
+    fn preview_document(&mut self) -> Option<&MarkdownDocument> {
+        let draft = self.draft.as_ref()?.current();
+        let key = (draft.note_id.clone(), draft.revision);
+        if self.preview_cache.key.as_ref() != Some(&key) {
+            self.preview_cache.document = Some(parse_preview(&draft.body));
+            self.preview_cache.key = Some(key);
+            self.cache_stats.preview_recomputes =
+                self.cache_stats.preview_recomputes.saturating_add(1);
+        }
+        self.preview_cache.document.as_ref()
+    }
+
+    fn select_note(&mut self, id: &str) {
+        if self.view.selected_id.as_deref() == Some(id) {
+            self.mobile_pane = MobilePane::Editor;
+            return;
+        }
+        let Some(note) = self.store.notes.iter().find(|note| note.id == id) else {
+            return;
+        };
+        let next = draft_from_note(note);
+        let switched = match &mut self.draft {
+            Some(draft) => draft.request_switch(next),
+            None => {
+                self.draft = Some(DraftCoordinator::new(next));
+                true
+            }
+        };
+        if switched {
+            self.view.selected_id = Some(id.to_owned());
+            self.preview_cache.key = None;
+            self.mobile_pane = MobilePane::Editor;
+        } else {
+            self.view.status = Some("Saving before switching notes…".into());
+        }
+    }
+
+    fn request_after_save(&mut self, action: DeferredAction) {
+        if self.deferred_action.is_some() {
+            self.view.status = Some("Finish the pending action before starting another.".into());
+            return;
+        }
+        let must_wait = self
+            .draft
+            .as_ref()
+            .is_some_and(DraftCoordinator::has_pending_work);
+        if !must_wait {
+            self.execute_deferred_action(action);
+            return;
+        }
+
+        self.deferred_action = Some(action);
+        if let Some(draft) = &mut self.draft {
+            if draft.last_error().is_none() {
+                draft.save_now();
+                self.view.status = Some("Saving before continuing…".into());
             }
         }
+    }
+
+    fn advance_deferred_action(&mut self) {
+        let ready = self
+            .draft
+            .as_ref()
+            .is_none_or(|draft| !draft.has_pending_work() && draft.last_error().is_none());
+        if ready {
+            if let Some(action) = self.deferred_action.take() {
+                self.execute_deferred_action(action);
+            }
+        }
+    }
+
+    fn execute_deferred_action(&mut self, action: DeferredAction) {
+        match action {
+            DeferredAction::Create => {
+                self.dispatch(Command::CreateNote, PendingCommand::Create);
+                self.view.status = Some("Creating note…".into());
+            }
+            DeferredAction::Select(id) => self.select_note(&id),
+            DeferredAction::ChangeFilter { collection, tag } => {
+                self.view.collection = collection;
+                self.view.tag = tag;
+                self.view.selected_id = None;
+                self.draft = None;
+                self.preview_cache.key = None;
+                self.mobile_pane = MobilePane::NoteList;
+            }
+            DeferredAction::SetState { id, state, value } => {
+                self.dispatch(
+                    Command::SetNoteState { id, state, value },
+                    PendingCommand::SetState,
+                );
+                self.view.status = Some("Updating note…".into());
+            }
+            DeferredAction::Mobile(pane) => self.mobile_pane = pane,
+            DeferredAction::FocusSearch => {
+                self.mobile_pane = MobilePane::NoteList;
+                self.request_search_focus = true;
+            }
+        }
+    }
+
+    fn dispatch_ready_save(&mut self) {
         let now = self.now_millis();
         let Some(request) = self
             .draft
@@ -56,7 +585,7 @@ impl CraneApp {
             return;
         };
         if let Err(error) = self.worker.try_send(request.clone()) {
-            if let Some(draft) = self.draft.as_mut() {
+            if let Some(draft) = &mut self.draft {
                 if error.code == ErrorCode::QueueFull {
                     draft.return_unsent(request);
                 } else {
@@ -68,10 +597,186 @@ impl CraneApp {
             self.view.status = Some("Saving…".into());
         }
     }
-}
 
-impl eframe::App for CraneApp {
-    fn logic(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+    fn dispatch(&mut self, command: Command, pending: PendingCommand) {
+        let request_id = self.next_request_id;
+        self.next_request_id = self.next_request_id.saturating_add(1);
+        match self.worker.try_send(WorkerRequest {
+            request_id,
+            command,
+        }) {
+            Ok(()) => {
+                self.pending_requests.insert(request_id, pending);
+            }
+            Err(error) => self.view.status = Some(error.message),
+        }
+    }
+
+    fn poll_worker(&mut self) {
+        while let Some(result) = self.worker.try_recv() {
+            self.accept_worker_result(result);
+        }
+        if let Some(draft) = &self.draft {
+            let current_id = draft.current().note_id.clone();
+            if self.view.selected_id.as_deref() != Some(current_id.as_str())
+                && !draft.has_pending_work()
+            {
+                self.view.selected_id = Some(current_id);
+                self.preview_cache.key = None;
+            }
+        }
+    }
+
+    fn accept_worker_result(&mut self, result: WorkerResult) {
+        let pending = self.pending_requests.remove(&result.request_id);
+        if pending.is_none() {
+            if let Ok(command_result) = &result.result {
+                if let CommandData::Saved { note, .. } = &command_result.data {
+                    self.replace_note(note.clone(), command_result.revision);
+                }
+            }
+            if let Some(draft) = &mut self.draft {
+                draft.complete(result);
+                if let Some(error) = draft.last_error() {
+                    self.view.status = Some(error.message.clone());
+                    self.saved_at = None;
+                } else {
+                    self.mark_saved();
+                }
+            }
+            return;
+        }
+
+        let pending = pending.expect("generic result was identified above");
+        match result.result {
+            Ok(command_result) => {
+                self.store_revision = command_result.revision;
+                match command_result.data {
+                    CommandData::Created(note) => {
+                        self.store.notes.push(note.clone());
+                        self.draft = Some(DraftCoordinator::new(draft_from_note(&note)));
+                        self.view.selected_id = Some(note.id);
+                        self.view.collection = crane_domain::Collection::Notes;
+                        self.view.tag = None;
+                        self.view.query.clear();
+                        self.request_title_focus = true;
+                        self.mobile_pane = MobilePane::Editor;
+                    }
+                    CommandData::StateChanged(note) => {
+                        self.replace_note(note, command_result.revision);
+                        if matches!(pending, PendingCommand::SetState) {
+                            self.reconcile_selected_visibility();
+                        }
+                    }
+                    CommandData::Imported { store, .. } | CommandData::Restored(store) => {
+                        self.store = store;
+                    }
+                    _ => {}
+                }
+                self.query_cache.key = None;
+                self.mark_saved();
+            }
+            Err(error) => self.view.status = Some(error.message),
+        }
+    }
+
+    fn replace_note(&mut self, note: Note, revision: u64) {
+        if let Some(existing) = self.store.notes.iter_mut().find(|item| item.id == note.id) {
+            *existing = note;
+        }
+        self.store_revision = revision;
+        self.query_cache.key = None;
+    }
+
+    fn reconcile_selected_visibility(&mut self) {
+        let visible = query_note_ids(&self.store, &self.view.filter());
+        if self
+            .view
+            .selected_id
+            .as_ref()
+            .is_some_and(|selected| !visible.contains(selected))
+        {
+            self.view.selected_id = None;
+            self.draft = None;
+            self.preview_cache.key = None;
+            self.mobile_pane = MobilePane::NoteList;
+        }
+    }
+
+    fn mark_saved(&mut self) {
+        self.view.status = Some("Saved".into());
+        self.saved_at = Some(Instant::now());
+    }
+
+    fn expire_saved_status(&mut self, context: &egui::Context) {
+        let Some(saved_at) = self.saved_at else {
+            return;
+        };
+        let duration = if self.settings.value().reduced_motion {
+            std::time::Duration::from_millis(200)
+        } else {
+            std::time::Duration::from_millis(1_200)
+        };
+        let elapsed = saved_at.elapsed();
+        if elapsed >= duration {
+            if self.view.status.as_deref() == Some("Saved") {
+                self.view.status = None;
+            }
+            self.saved_at = None;
+        } else {
+            context.request_repaint_after(duration - elapsed);
+        }
+    }
+
+    fn apply_theme(&mut self, context: &egui::Context) {
+        let choice = self.settings.value().theme;
+        if self.applied_theme != Some(choice) {
+            theme::apply(context, choice);
+            self.applied_theme = Some(choice);
+        }
+    }
+
+    fn persist_settings(&mut self, candidate: NativeSettings) {
+        match self.settings.commit(candidate) {
+            Ok(()) => self.applied_theme = None,
+            Err(error) => self.view.status = Some(error),
+        }
+    }
+
+    fn handle_shortcuts(&mut self, context: &egui::Context) {
+        let (new_note, save, preview, search, escape) = context.input(|input| {
+            let primary_modifier = input.modifiers.command || input.modifiers.ctrl;
+            (
+                primary_modifier && input.key_pressed(egui::Key::N),
+                primary_modifier && input.key_pressed(egui::Key::S),
+                primary_modifier && input.key_pressed(egui::Key::P),
+                primary_modifier && input.key_pressed(egui::Key::F),
+                input.key_pressed(egui::Key::Escape),
+            )
+        });
+        if new_note {
+            self.request_after_save(DeferredAction::Create);
+        }
+        if save {
+            self.save_now();
+        }
+        if preview {
+            self.view.preview = !self.view.preview;
+        }
+        if search {
+            self.request_after_save(DeferredAction::FocusSearch);
+        }
+        if escape {
+            let target = match self.mobile_pane {
+                MobilePane::Editor => MobilePane::NoteList,
+                MobilePane::NoteList => MobilePane::Library,
+                MobilePane::Library => MobilePane::Library,
+            };
+            self.request_after_save(DeferredAction::Mobile(target));
+        }
+    }
+
+    fn logic(&mut self, context: &egui::Context) {
         let close_requested = context.input(|input| input.viewport().close_requested());
         if close_requested
             && self
@@ -82,6 +787,8 @@ impl eframe::App for CraneApp {
             context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
         self.poll_worker();
+        self.dispatch_ready_save();
+        self.advance_deferred_action();
         if self.draft.as_ref().is_some_and(DraftCoordinator::can_close) {
             context.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if let Some(delay) = self
@@ -92,46 +799,24 @@ impl eframe::App for CraneApp {
             context.request_repaint_after(std::time::Duration::from_millis(delay));
         }
     }
+}
+
+impl eframe::App for CraneApp {
+    fn logic(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.logic(context);
+    }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("Crane");
-            ui.label("Native preview — isolated test data");
-            ui.separator();
-            let now = self.now_millis();
-            if let Some(editor) = self.draft.as_mut() {
-                let mut title = editor.current().title.clone();
-                let mut body = editor.current().body.clone();
-                let title_changed = ui
-                    .add(egui::TextEdit::singleline(&mut title).hint_text("Title"))
-                    .changed();
-                let body_changed = ui
-                    .add(
-                        egui::TextEdit::multiline(&mut body)
-                            .desired_rows(24)
-                            .hint_text("Write in Markdown…"),
-                    )
-                    .changed();
-                if title_changed || body_changed {
-                    editor.edit(title, body, now);
-                    ui.ctx()
-                        .request_repaint_after(std::time::Duration::from_millis(
-                            crate::draft::SAVE_DELAY_MILLIS,
-                        ));
-                }
-                if let Some(error) = editor.last_error() {
-                    ui.colored_label(ui.visuals().error_fg_color, &error.message);
-                    if ui.button("Retry save").clicked() {
-                        editor.retry();
-                    }
-                }
-            } else {
-                ui.label("The isolated preview library has no notes.");
-            }
-            if let Some(status) = &self.view.status {
-                ui.separator();
-                ui.label(status);
-            }
-        });
+        egui::CentralPanel::default().show(ui, |ui| self.show(ui));
+    }
+}
+
+fn draft_from_note(note: &Note) -> Draft {
+    Draft {
+        note_id: note.id.clone(),
+        title: note.title.clone(),
+        body: note.body.clone(),
+        revision: 0,
+        acknowledged_revision: 0,
     }
 }

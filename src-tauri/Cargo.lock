@@ -444,6 +444,7 @@ dependencies = [
  "crane-application",
  "crane-domain",
  "crane-platform",
+ "serde",
  "serde_json",
 ]
 

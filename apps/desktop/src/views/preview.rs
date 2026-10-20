@@ -1,0 +1,175 @@
+use crane_domain::{Inline, MarkdownBlock, MarkdownDocument};
+use eframe::egui::{self, RichText};
+
+pub fn show(ui: &mut egui::Ui, document: &MarkdownDocument) -> Option<String> {
+    show_with_opener(ui, document, &mut crane_platform::open_http_link)
+}
+
+#[doc(hidden)]
+pub fn show_with_opener(
+    ui: &mut egui::Ui,
+    document: &MarkdownDocument,
+    opener: &mut impl FnMut(&str) -> Result<(), crane_platform::PlatformError>,
+) -> Option<String> {
+    let mut failure = None;
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        for block in &document.blocks {
+            match block {
+                MarkdownBlock::Heading { level, content } => {
+                    let size = (30.0 - f32::from(*level) * 2.0).max(18.0);
+                    ui.horizontal_wrapped(|ui| {
+                        render_inlines(
+                            ui,
+                            content,
+                            InlineStyle {
+                                strong: true,
+                                size: Some(size),
+                                ..InlineStyle::default()
+                            },
+                            opener,
+                            &mut failure,
+                        );
+                    });
+                }
+                MarkdownBlock::Paragraph(content) => {
+                    ui.horizontal_wrapped(|ui| {
+                        render_inlines(ui, content, InlineStyle::default(), opener, &mut failure);
+                    });
+                }
+                MarkdownBlock::Quote(content) => {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("❯").italics());
+                        render_inlines(
+                            ui,
+                            content,
+                            InlineStyle {
+                                italics: true,
+                                ..InlineStyle::default()
+                            },
+                            opener,
+                            &mut failure,
+                        );
+                    });
+                }
+                MarkdownBlock::Code { language, text } => {
+                    if let Some(language) = language {
+                        ui.small(language);
+                    }
+                    ui.monospace(text);
+                }
+                MarkdownBlock::List { ordered, items } => {
+                    for (index, item) in items.iter().enumerate() {
+                        let marker = match item.checked {
+                            Some(true) => "☑".to_owned(),
+                            Some(false) => "☐".to_owned(),
+                            None if *ordered => format!("{}.", index + 1),
+                            None => "•".to_owned(),
+                        };
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(marker);
+                            render_inlines(
+                                ui,
+                                &item.content,
+                                InlineStyle::default(),
+                                opener,
+                                &mut failure,
+                            );
+                        });
+                    }
+                }
+                MarkdownBlock::Rule => {
+                    ui.separator();
+                }
+            }
+            ui.add_space(7.0);
+        }
+    });
+    failure
+}
+
+#[derive(Clone, Copy, Default)]
+struct InlineStyle {
+    strong: bool,
+    italics: bool,
+    size: Option<f32>,
+}
+
+fn render_inlines(
+    ui: &mut egui::Ui,
+    inlines: &[Inline],
+    style: InlineStyle,
+    opener: &mut impl FnMut(&str) -> Result<(), crane_platform::PlatformError>,
+    failure: &mut Option<String>,
+) {
+    for inline in inlines {
+        match inline {
+            Inline::Text(text) | Inline::ImageAlt(text) => {
+                ui.label(styled_text(text, style));
+            }
+            Inline::Code(text) => {
+                ui.monospace(text);
+            }
+            Inline::Emphasis(children) => {
+                render_inlines(
+                    ui,
+                    children,
+                    InlineStyle {
+                        italics: true,
+                        ..style
+                    },
+                    opener,
+                    failure,
+                );
+            }
+            Inline::Strong(children) => {
+                render_inlines(
+                    ui,
+                    children,
+                    InlineStyle {
+                        strong: true,
+                        ..style
+                    },
+                    opener,
+                    failure,
+                );
+            }
+            Inline::Link { label, url } => {
+                if ui.link(styled_text(inline_text(label), style)).clicked() {
+                    if let Err(error) = opener(url) {
+                        *failure = Some(error.to_string());
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn styled_text(text: impl Into<String>, style: InlineStyle) -> RichText {
+    let mut text = RichText::new(text);
+    if style.strong {
+        text = text.strong();
+    }
+    if style.italics {
+        text = text.italics();
+    }
+    if let Some(size) = style.size {
+        text = text.size(size);
+    }
+    text
+}
+
+fn inline_text(inlines: &[Inline]) -> String {
+    let mut text = String::new();
+    for inline in inlines {
+        match inline {
+            Inline::Text(value) | Inline::Code(value) | Inline::ImageAlt(value) => {
+                text.push_str(value)
+            }
+            Inline::Emphasis(children) | Inline::Strong(children) => {
+                text.push_str(&inline_text(children));
+            }
+            Inline::Link { label, .. } => text.push_str(&inline_text(label)),
+        }
+    }
+    text
+}

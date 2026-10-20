@@ -12,6 +12,11 @@ This matrix records the behavior protected by the released Tauri/DOM implementat
 - **NA-06 — Transfer command boundary:** the desktop shell dispatches typed application commands with narrow arguments and no arbitrary filesystem or shell primitive.
 - **NA-07 — Atomic export/backup:** native adapters publish only complete exports/backups, reject unsafe or duplicate relative destinations, and remove only their own temporary artifacts on failure.
 - **NA-08 — Native Markdown view:** headings, paragraphs, quotes, lists, read-only tasks, fenced code, nested emphasis, safe links, literal HTML, and image alt text render from the safe Rust presentation tree without executing or fetching content.
+- **NA-09 — Native writing flow:** create, select, edit, save, search, nested-tag filter, pin, archive, trash, restore, preview, and theme controls are exposed through named native widgets. A note switch waits for the dirty draft to save, and a failed save retains both draft and selection with a visible Retry action.
+- **NA-10 — Native responsive navigation:** the 900/680 point breakpoints map to wide, collapsed-rail, and single-pane layouts. The sub-680 harness has explicit editor-to-list and list-to-library navigation while the production window retains its 720-point minimum.
+- **NA-11 — Native settings:** theme and reduced-motion settings use a versioned JSON document written through a temporary sibling and atomic replacement. Missing settings use defaults; future schemas fail visibly; a failed replacement preserves the old document.
+- **NA-12 — Native accessibility:** primary buttons and text fields have stable AccessKit names, keyboard Tab traversal reaches search and the editor, and theme/state changes do not depend on pointer-only gestures.
+- **NA-13 — Cache discipline:** query results recompute only when the store revision or filter changes; Markdown preview recomputes only when the selected draft revision changes. Theme changes do not invalidate either cache.
 
 ## JavaScript test parity
 
@@ -90,3 +95,11 @@ This matrix records the behavior protected by the released Tauri/DOM implementat
 - **Trash filtering correction:** the legacy JavaScript returned every trashed note before applying the selected tag or query. Native `query_note_ids` applies tag and text filters to Trash just like the other collections. `queries::trash_applies_tag_and_query_filters_instead_of_returning_early` locks this intended user behavior.
 - **Saved tag grammar is unchanged:** tag extraction remains whitespace-led `#tag` parsing with Unicode letters/numbers plus `_`, `-`, and non-empty `/`-separated segments. Existing stored tags and version-1 fixtures are not reinterpreted.
 - **Unsafe Markdown stays data:** raw HTML is literal text, only `http://` and `https://` destinations become links, unsafe schemes in literal HTML are neutralized, and images retain alt text without a fetchable URL.
+
+## Native Task 7 evidence
+
+- `apps/desktop/tests/navigation.rs` covers creation focus, search, exact nested-tag filtering, pin/archive/trash/restore flows, cache invalidation, all three layout breakpoints, and explicit single-pane navigation.
+- `apps/desktop/tests/editor.rs` covers Unicode Markdown persistence through save and note switching, safe preview/theme behavior, preview cache stability, and retained draft/selection on failure.
+- `apps/desktop/tests/accessibility.rs` queries every primary interactive control by role and name and traverses the native Tab order into search and the note body.
+- `crates/storage/tests/settings.rs` covers missing defaults, round trips, future-schema rejection, and synthetic atomic replacement failure without changing the previous settings file.
+- The remaining physical Windows checks and the spellcheck parity decision are tracked in `docs/migration/windows-acceptance.md`; they are not inferred from automated coverage.

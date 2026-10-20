@@ -163,3 +163,17 @@ fn queue_saturation_coalesces_the_unsent_save_to_latest_typing() {
     assert_eq!(coalesced.draft_revision(), Some(2));
     assert_eq!(coalesced.save_body(), Some("latest"));
 }
+
+#[test]
+fn separate_draft_coordinators_never_reuse_request_ids() {
+    let mut first = DraftCoordinator::new(draft("a", "old", 0, 0));
+    first.edit("A".into(), "changed".into(), 1);
+    first.save_now();
+    let first_id = first.take_ready_request(1).unwrap().request_id;
+
+    let mut second = DraftCoordinator::new(draft("b", "old", 0, 0));
+    second.edit("B".into(), "changed".into(), 1);
+    second.save_now();
+    let second_id = second.take_ready_request(1).unwrap().request_id;
+    assert_ne!(first_id, second_id);
+}

@@ -34,3 +34,12 @@ window, so pointer/keyboard automation could not independently exercise typing,
 paste, undo, or IME in this pass. Those checks remain explicitly open rather than
 being inferred from a successful build or from egui feature flags. Native
 spellcheck has likewise not been established and must not be claimed as parity.
+
+## 2026-10-20 Task 7 automated writing-interface check
+
+- Native kittest coverage now exercises named controls for create, search, nested tags, state changes, preview/theme toggles, title focus, Tab traversal, and explicit sub-680 editor/list/library navigation.
+- The editor binds egui directly to the active draft's persistent title and body strings. Automated Unicode Markdown save-and-switch coverage confirms the text survives the worker transaction without a per-frame field replacement.
+- Query and Markdown presentation caches are revision keyed and have regression tests proving unrelated frames and theme changes do not recompute them.
+- Version-1 native settings load and save atomically; tests cover missing defaults, future-schema rejection, and a failed replacement retaining the previous file.
+- The Task 7 binary launched against `artifacts/test-data/task7-native-writing` and reported the NVIDIA GeForce RTX 3050 Laptop GPU through DX12. The computer-control inventory still returned no native applications and exposed no Windows-listing function, so the preview was stopped without recording unobserved interactions as passes.
+- The physical Windows matrix and the open spellcheck product decision are maintained in `windows-acceptance.md`. They remain milestone gates rather than implied passes.

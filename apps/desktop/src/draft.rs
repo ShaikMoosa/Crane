@@ -1,7 +1,9 @@
 use crate::worker::{WorkerRequest, WorkerResult};
 use crane_application::{AppError, Command, CommandData, ErrorCode};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const SAVE_DELAY_MILLIS: u64 = 550;
+static NEXT_DRAFT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Draft {
@@ -49,7 +51,6 @@ pub struct DraftCoordinator {
     transition: Option<Transition>,
     close_ready: bool,
     last_edit_millis: u64,
-    next_request_id: u64,
 }
 
 impl DraftCoordinator {
@@ -60,12 +61,29 @@ impl DraftCoordinator {
             transition: None,
             close_ready: false,
             last_edit_millis: 0,
-            next_request_id: 1,
         }
     }
 
     pub fn current(&self) -> &Draft {
         &self.current
+    }
+
+    pub fn current_mut(&mut self) -> &mut Draft {
+        &mut self.current
+    }
+
+    pub fn mark_edited(&mut self, now_millis: u64) {
+        self.current.revision = self.current.revision.saturating_add(1);
+        self.last_edit_millis = now_millis;
+        self.close_ready = false;
+        if let SaveState::Queued(request) = &mut self.state {
+            request.command = Command::SaveNote {
+                id: self.current.note_id.clone(),
+                title: self.current.title.clone(),
+                body: self.current.body.clone(),
+                draft_revision: self.current.revision,
+            };
+        }
     }
 
     pub fn edit(&mut self, title: String, body: String, now_millis: u64) {
@@ -189,6 +207,14 @@ impl DraftCoordinator {
         true
     }
 
+    pub fn save_now(&mut self) {
+        self.queue_immediate_if_possible();
+    }
+
+    pub fn has_pending_work(&self) -> bool {
+        !matches!(self.state, SaveState::Idle) || self.current.is_dirty()
+    }
+
     fn can_transition_now(&self) -> bool {
         !self.current.is_dirty() && matches!(self.state, SaveState::Idle)
     }
@@ -208,7 +234,7 @@ impl DraftCoordinator {
 
     fn queue_save(&mut self) {
         let request = WorkerRequest {
-            request_id: self.next_request_id,
+            request_id: NEXT_DRAFT_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
             command: Command::SaveNote {
                 id: self.current.note_id.clone(),
                 title: self.current.title.clone(),
@@ -216,7 +242,6 @@ impl DraftCoordinator {
                 draft_revision: self.current.revision,
             },
         };
-        self.next_request_id = self.next_request_id.saturating_add(1);
         self.state = SaveState::Queued(request);
     }
 
