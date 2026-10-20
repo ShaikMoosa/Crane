@@ -1,7 +1,7 @@
 use crate::{read_limited, write_atomic_bytes, StorageError};
 use crane_domain::{validate_store, Store};
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const MAX_STORE_BYTES: usize = 256 * 1024 * 1024;
 
@@ -15,13 +15,18 @@ impl JsonRepository {
     }
 
     pub fn load_or_seed(&mut self, now: u64) -> Result<Store, StorageError> {
+        if let Some(store) = self.load_existing()? {
+            return Ok(store);
+        }
+        let seed = Store::seed(now);
+        self.commit(&seed)?;
+        Ok(seed)
+    }
+
+    pub fn load_existing(&mut self) -> Result<Option<Store>, StorageError> {
         let file = match File::open(&self.path) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let seed = Store::seed(now);
-                self.commit(&seed)?;
-                return Ok(seed);
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => {
                 return Err(StorageError::new(format!(
                     "Could not read the local store: {error}"
@@ -33,7 +38,7 @@ impl JsonRepository {
             StorageError::new(format!("The local store is not valid JSON: {error}"))
         })?;
         validate_store(&store).map_err(|error| StorageError::new(error.to_string()))?;
-        Ok(store)
+        Ok(Some(store))
     }
 
     pub fn commit(&mut self, candidate: &Store) -> Result<(), StorageError> {
@@ -46,5 +51,9 @@ impl JsonRepository {
             ));
         }
         write_atomic_bytes(&self.path, &bytes)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 }

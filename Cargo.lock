@@ -630,7 +630,7 @@ dependencies = [
 
 [[package]]
 name = "crane-application"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crane-domain",
  "serde_json",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "crane-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crane-application",
  "crane-domain",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "crane-domain"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pulldown-cmark",
  "serde",
@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "crane-platform"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crane-application",
  "dirs",
@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "crane-storage"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "crane-application",
  "crane-domain",

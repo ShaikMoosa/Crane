@@ -15,7 +15,9 @@ pub use fonts::{
     load_permitted_local_font, local_font_paths, permitted_local_font_families, LocalFontPaths,
     PERMITTED_LOCAL_FONT_FAMILIES,
 };
-pub use instance::LibraryGuard;
+pub use instance::{
+    classify_legacy_process_paths, legacy_process_status, LegacyProcessStatus, LibraryGuard,
+};
 pub use links::{open_http_link, validate_http_link};
 pub use paths::resolve_legacy_data_dir;
 

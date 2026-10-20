@@ -1,9 +1,9 @@
 use crate::{read_limited, write_atomic_bytes, StorageError};
 use crane_application::{AppError, ErrorCode, ExportSummary, Outcome, TransferIo};
 use crane_domain::{
-    build_export_manifest, make_backup, serialize_backup_with_limit, serialize_markdown,
-    suggested_markdown_filename, BackupEnvelope, ExportManifest, NamedBytes, Note, Store,
-    MAX_BACKUP_BYTES, MAX_BATCH_BYTES,
+    build_export_manifest, inspect_backup, make_backup, serialize_backup_with_limit,
+    serialize_markdown, suggested_markdown_filename, BackupEnvelope, ExportManifest, NamedBytes,
+    Note, Store, MAX_BACKUP_BYTES, MAX_BATCH_BYTES,
 };
 use crane_platform::{DialogProvider, DialogSelection};
 use std::fs::{self, File, OpenOptions};
@@ -145,12 +145,56 @@ impl TransferIo for FilesystemTransfers {
             )
         })?;
         let envelope = make_backup(store, created_at, &self.app_version)?;
-        let path = reserve_safety_path(&self.safety_directory, created_at).map_err(storage)?;
+        let path = reserve_backup_path(&self.safety_directory, "pre-restore", created_at)
+            .map_err(storage)?;
         let result = write_backup_with_limit(&path, &envelope, MAX_BACKUP_BYTES);
         if result.is_err() {
             let _ = fs::remove_file(&path);
         }
         result.map_err(storage)
+    }
+
+    fn write_pre_migration_backup(
+        &mut self,
+        store: &Store,
+        created_at: u64,
+    ) -> Result<String, AppError> {
+        fs::create_dir_all(&self.safety_directory).map_err(|error| {
+            AppError::new(
+                ErrorCode::Io,
+                format!("Could not create the backup directory: {error}"),
+            )
+        })?;
+        let envelope = make_backup(store, created_at, &self.app_version)?;
+        let path = reserve_backup_path(&self.safety_directory, "pre-migration", created_at)
+            .map_err(storage)?;
+        let result = (|| {
+            write_backup_with_limit(&path, &envelope, MAX_BACKUP_BYTES).map_err(storage)?;
+            let bytes = read_limited(
+                File::open(&path).map_err(|error| {
+                    AppError::new(
+                        ErrorCode::Io,
+                        format!("Could not validate the backup: {error}"),
+                    )
+                })?,
+                MAX_BACKUP_BYTES,
+            )
+            .map_err(storage)?;
+            inspect_backup(&bytes).map_err(AppError::from)?;
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::Io,
+                        "The pre-migration backup filename is not valid Unicode.",
+                    )
+                })
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&path);
+        }
+        result
     }
 }
 
@@ -219,12 +263,16 @@ pub fn write_library_export_with(
     result
 }
 
-fn reserve_safety_path(directory: &Path, timestamp: u64) -> Result<PathBuf, StorageError> {
+fn reserve_backup_path(
+    directory: &Path,
+    prefix: &str,
+    timestamp: u64,
+) -> Result<PathBuf, StorageError> {
     for suffix in 1..=10_000usize {
         let name = if suffix == 1 {
-            format!("pre-restore-{timestamp}{BACKUP_SUFFIX}")
+            format!("{prefix}-{timestamp}{BACKUP_SUFFIX}")
         } else {
-            format!("pre-restore-{timestamp}-{suffix}{BACKUP_SUFFIX}")
+            format!("{prefix}-{timestamp}-{suffix}{BACKUP_SUFFIX}")
         };
         let path = directory.join(name);
         match OpenOptions::new().write(true).create_new(true).open(&path) {

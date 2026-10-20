@@ -27,4 +27,13 @@ pub trait TransferIo: Send {
         -> Result<Outcome<usize>, AppError>;
     fn pick_backup(&mut self) -> Result<Outcome<Vec<u8>>, AppError>;
     fn write_safety_backup(&mut self, store: &Store, created_at: u64) -> Result<(), AppError>;
+
+    fn write_pre_migration_backup(
+        &mut self,
+        store: &Store,
+        created_at: u64,
+    ) -> Result<String, AppError> {
+        self.write_safety_backup(store, created_at)?;
+        Ok(format!("pre-migration-{created_at}.crane-backup.json"))
+    }
 }

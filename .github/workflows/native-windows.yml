@@ -1,0 +1,39 @@
+name: native-windows
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99.1"
+          components: clippy, rustfmt
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test
+        run: cargo test --workspace --all-features --locked
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Build
+        run: cargo build --workspace --all-targets --all-features --locked
+      - name: Dependency layers
+        run: powershell -NoProfile -File scripts/check-layers.ps1
+      - name: Script self-tests
+        run: |
+          powershell -NoProfile -File scripts/check-layers.ps1 -SelfTest
+          powershell -NoProfile -File scripts/smoke-windows.ps1 -SelfTest
+      - name: Windows package (binary; installer when NSIS present)
+        run: powershell -NoProfile -File scripts/build-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crane-windows
+          path: artifacts/windows/
+          if-no-files-found: warn
+      # GUI/GPU/dialog/IME/installer-upgrade smoke tests require an interactive
+      # Windows session and are a separate manual gate (docs/migration/windows-acceptance.md).
+      # Headless CI green does not prove them.
