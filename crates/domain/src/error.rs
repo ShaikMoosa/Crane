@@ -8,6 +8,14 @@ pub enum ValidationCode {
     TimestampOutOfRange,
     UnsupportedSchema,
     DuplicateId,
+    UnsupportedExtension,
+    InvalidUtf8,
+    BatchTooLarge,
+    MissingImportId,
+    BackupFormat,
+    UnsupportedBackupVersion,
+    BackupTooLarge,
+    InvalidBackup,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

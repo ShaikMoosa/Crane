@@ -1,0 +1,27 @@
+{
+  "format": "crane-backup",
+  "backupVersion": 1,
+  "createdAt": 500,
+  "appVersion": "0.1.0",
+  "store": {
+    "schemaVersion": 1,
+    "notes": [
+      {
+        "id": "legacy-active",
+        "title": "Backup note",
+        "body": "Preserved #backup/v1",
+        "tags": ["backup/v1"],
+        "createdAt": 0,
+        "updatedAt": 0,
+        "pinned": true,
+        "archived": false,
+        "trashed": false,
+        "futureNote": "preserved"
+      }
+    ],
+    "futureStore": 42
+  },
+  "futureBackup": {
+    "kind": "synthetic"
+  }
+}
