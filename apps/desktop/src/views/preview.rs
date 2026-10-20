@@ -12,78 +12,86 @@ pub fn show_with_opener(
     opener: &mut impl FnMut(&str) -> Result<(), crane_platform::PlatformError>,
 ) -> Option<String> {
     let mut failure = None;
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for block in &document.blocks {
-            match block {
-                MarkdownBlock::Heading { level, content } => {
-                    let size = (30.0 - f32::from(*level) * 2.0).max(18.0);
-                    ui.horizontal_wrapped(|ui| {
-                        render_inlines(
-                            ui,
-                            content,
-                            InlineStyle {
-                                strong: true,
-                                size: Some(size),
-                                ..InlineStyle::default()
-                            },
-                            opener,
-                            &mut failure,
-                        );
-                    });
-                }
-                MarkdownBlock::Paragraph(content) => {
-                    ui.horizontal_wrapped(|ui| {
-                        render_inlines(ui, content, InlineStyle::default(), opener, &mut failure);
-                    });
-                }
-                MarkdownBlock::Quote(content) => {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new("❯").italics());
-                        render_inlines(
-                            ui,
-                            content,
-                            InlineStyle {
-                                italics: true,
-                                ..InlineStyle::default()
-                            },
-                            opener,
-                            &mut failure,
-                        );
-                    });
-                }
-                MarkdownBlock::Code { language, text } => {
-                    if let Some(language) = language {
-                        ui.small(language);
-                    }
-                    ui.monospace(text);
-                }
-                MarkdownBlock::List { ordered, items } => {
-                    for (index, item) in items.iter().enumerate() {
-                        let marker = match item.checked {
-                            Some(true) => "☑".to_owned(),
-                            Some(false) => "☐".to_owned(),
-                            None if *ordered => format!("{}.", index + 1),
-                            None => "•".to_owned(),
-                        };
+    egui::ScrollArea::vertical()
+        .id_salt("crane-markdown-preview")
+        .show(ui, |ui| {
+            for block in &document.blocks {
+                match block {
+                    MarkdownBlock::Heading { level, content } => {
+                        let size = (30.0 - f32::from(*level) * 2.0).max(18.0);
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(marker);
                             render_inlines(
                                 ui,
-                                &item.content,
+                                content,
+                                InlineStyle {
+                                    strong: true,
+                                    size: Some(size),
+                                    ..InlineStyle::default()
+                                },
+                                opener,
+                                &mut failure,
+                            );
+                        });
+                    }
+                    MarkdownBlock::Paragraph(content) => {
+                        ui.horizontal_wrapped(|ui| {
+                            render_inlines(
+                                ui,
+                                content,
                                 InlineStyle::default(),
                                 opener,
                                 &mut failure,
                             );
                         });
                     }
+                    MarkdownBlock::Quote(content) => {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(RichText::new("❯").italics());
+                            render_inlines(
+                                ui,
+                                content,
+                                InlineStyle {
+                                    italics: true,
+                                    ..InlineStyle::default()
+                                },
+                                opener,
+                                &mut failure,
+                            );
+                        });
+                    }
+                    MarkdownBlock::Code { language, text } => {
+                        if let Some(language) = language {
+                            ui.small(language);
+                        }
+                        ui.monospace(text);
+                    }
+                    MarkdownBlock::List { ordered, items } => {
+                        for (index, item) in items.iter().enumerate() {
+                            let marker = match item.checked {
+                                Some(true) => "☑".to_owned(),
+                                Some(false) => "☐".to_owned(),
+                                None if *ordered => format!("{}.", index + 1),
+                                None => "•".to_owned(),
+                            };
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(marker);
+                                render_inlines(
+                                    ui,
+                                    &item.content,
+                                    InlineStyle::default(),
+                                    opener,
+                                    &mut failure,
+                                );
+                            });
+                        }
+                    }
+                    MarkdownBlock::Rule => {
+                        ui.separator();
+                    }
                 }
-                MarkdownBlock::Rule => {
-                    ui.separator();
-                }
+                ui.add_space(7.0);
             }
-            ui.add_space(7.0);
-        }
-    });
+        });
     failure
 }
 

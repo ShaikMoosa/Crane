@@ -2,6 +2,14 @@ use crane_domain::{Collection, Store};
 use crane_storage::ThemeChoice;
 use eframe::egui;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DataAction {
+    ImportMarkdown,
+    ExportLibrary,
+    CreateBackup,
+    InspectBackup,
+}
+
 #[derive(Default)]
 pub struct LibraryActions {
     pub create: bool,
@@ -9,17 +17,35 @@ pub struct LibraryActions {
     pub tag: Option<Option<String>>,
     pub toggle_theme: bool,
     pub reduced_motion: Option<bool>,
+    pub transfer: Option<DataAction>,
 }
 
-pub fn show(
-    ui: &mut egui::Ui,
-    store: &Store,
-    active_collection: Collection,
-    active_tag: Option<&str>,
-    theme: ThemeChoice,
-    reduced_motion: bool,
-    collapsed: bool,
-) -> LibraryActions {
+pub struct LibraryView<'a> {
+    pub store: &'a Store,
+    pub active_collection: Collection,
+    pub active_tag: Option<&'a str>,
+    pub theme: ThemeChoice,
+    pub reduced_motion: bool,
+    pub collapsed: bool,
+    pub mutations_enabled: bool,
+    pub data_menu_open: &'a mut bool,
+    pub request_data_focus: bool,
+    pub transfer_status: Option<&'a str>,
+}
+
+pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
+    let LibraryView {
+        store,
+        active_collection,
+        active_tag,
+        theme,
+        reduced_motion,
+        collapsed,
+        mutations_enabled,
+        data_menu_open,
+        request_data_focus,
+        transfer_status,
+    } = view;
     let mut actions = LibraryActions::default();
     let mut tags: Vec<_> = store
         .notes
@@ -29,7 +55,7 @@ pub fn show(
     tags.sort();
     tags.dedup();
 
-    let footer_height = 96.0;
+    let footer_height = if *data_menu_open { 248.0 } else { 128.0 };
     let content_size = egui::vec2(
         ui.available_width(),
         (ui.available_height() - footer_height).max(0.0),
@@ -40,7 +66,10 @@ pub fn show(
         |ui| {
             ui.heading(if collapsed { "C" } else { "Crane" });
             if ui
-                .button(if collapsed { "+" } else { "+  New note" })
+                .add_enabled(
+                    mutations_enabled,
+                    egui::Button::new(if collapsed { "+" } else { "+  New note" }),
+                )
                 .accessible_name("New note")
                 .clicked()
             {
@@ -65,7 +94,10 @@ pub fn show(
                     .count();
                 let expanded = format!("{label}  {count}");
                 let text = if collapsed { short } else { &expanded };
-                let response = ui.selectable_label(active_collection == collection, text);
+                let response = ui.add_enabled(
+                    mutations_enabled,
+                    egui::Button::selectable(active_collection == collection, text),
+                );
                 let response = if collapsed {
                     response.on_hover_text(label)
                 } else {
@@ -96,9 +128,12 @@ pub fn show(
                         for tag in tags {
                             let label = format!("#{tag}");
                             let response = ui
-                                .selectable_label(
-                                    active_tag == Some(tag.as_str()),
-                                    if collapsed { "#" } else { &label },
+                                .add_enabled(
+                                    mutations_enabled,
+                                    egui::Button::selectable(
+                                        active_tag == Some(tag.as_str()),
+                                        if collapsed { "#" } else { &label },
+                                    ),
                                 )
                                 .accessible_name(&label);
                             if response.clicked() {
@@ -112,6 +147,46 @@ pub fn show(
         },
     );
     ui.separator();
+    let data = ui
+        .add_enabled(
+            mutations_enabled,
+            egui::Button::new(if collapsed { "D" } else { "Data" })
+                .min_size(egui::vec2(44.0, 44.0)),
+        )
+        .accessible_name("Data");
+    data.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::DisclosureTriangle, mutations_enabled, "Data")
+    });
+    ui.ctx()
+        .accesskit_node_builder(data.id, |node| node.set_expanded(*data_menu_open));
+    if request_data_focus {
+        data.request_focus();
+    }
+    if data.clicked() {
+        *data_menu_open = !*data_menu_open;
+    }
+    if *data_menu_open {
+        for (label, action) in [
+            ("Import Markdown…", DataAction::ImportMarkdown),
+            ("Export library…", DataAction::ExportLibrary),
+            ("Create backup…", DataAction::CreateBackup),
+            ("Restore backup…", DataAction::InspectBackup),
+        ] {
+            if ui
+                .add_enabled(
+                    mutations_enabled,
+                    egui::Button::new(label).min_size(egui::vec2(44.0, 44.0)),
+                )
+                .clicked()
+            {
+                actions.transfer = Some(action);
+                *data_menu_open = false;
+            }
+        }
+    }
+    if let Some(status) = transfer_status {
+        ui.small(status);
+    }
     let theme_label = match theme {
         ThemeChoice::Dark => "Use light theme",
         ThemeChoice::Light => "Use dark theme",

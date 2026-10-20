@@ -1,7 +1,7 @@
 use crane_application::Library;
 use crane_desktop::app::CraneApp;
-use crane_platform::SystemEnvironment;
-use crane_storage::{load_settings, JsonRepository};
+use crane_platform::{NativeDialogs, SystemEnvironment};
+use crane_storage::{load_settings, FilesystemTransfers, JsonRepository};
 use eframe::egui;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -20,7 +20,12 @@ fn run() -> Result<(), String> {
     prepare_preview_root(&root)?;
     let repository = JsonRepository::new(root.join("notes.json"));
     let library = Library::open(Box::new(repository), Box::new(SystemEnvironment::new()))
-        .map_err(|error| error.message)?;
+        .map_err(|error| error.message)?
+        .with_transfers(Box::new(FilesystemTransfers::new(
+            Box::new(NativeDialogs),
+            root.join("backups"),
+            env!("CARGO_PKG_VERSION"),
+        )));
     let snapshot = library.snapshot();
     let settings_path = root.join("settings.json");
     let settings = load_settings(&settings_path)

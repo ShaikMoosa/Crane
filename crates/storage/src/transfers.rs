@@ -75,6 +75,9 @@ impl TransferIo for FilesystemTransfers {
             return Ok(Outcome::Cancelled);
         };
         let path = ensure_suffix(selected, ".md");
+        if path.exists() && !self.dialogs.confirm_replace(&path).map_err(platform)? {
+            return Ok(Outcome::Cancelled);
+        }
         write_atomic_bytes(&path, serialize_markdown(note).as_bytes()).map_err(storage)?;
         Ok(Outcome::Completed(1))
     }

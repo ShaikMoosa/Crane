@@ -45,6 +45,7 @@ enum Transition {
     Close,
 }
 
+#[derive(Clone)]
 pub struct DraftCoordinator {
     current: Draft,
     state: SaveState,

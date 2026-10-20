@@ -43,6 +43,7 @@ struct FakeDialogs {
 }
 
 struct DialogState {
+    note_path: Option<PathBuf>,
     backup_path: Option<PathBuf>,
     confirm: bool,
     confirmed_path: Option<PathBuf>,
@@ -52,7 +53,19 @@ impl FakeDialogs {
     fn backup(path: PathBuf, confirm: bool) -> Self {
         Self {
             state: Arc::new(Mutex::new(DialogState {
+                note_path: None,
                 backup_path: Some(path),
+                confirm,
+                confirmed_path: None,
+            })),
+        }
+    }
+
+    fn note(path: PathBuf, confirm: bool) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(DialogState {
+                note_path: Some(path),
+                backup_path: None,
                 confirm,
                 confirmed_path: None,
             })),
@@ -73,7 +86,8 @@ impl DialogProvider for FakeDialogs {
         &mut self,
         _suggested_name: &str,
     ) -> Result<DialogSelection<PathBuf>, PlatformError> {
-        Ok(DialogSelection::Cancelled)
+        let path = self.state.lock().unwrap().note_path.take();
+        Ok(path.map_or(DialogSelection::Cancelled, DialogSelection::Selected))
     }
 
     fn pick_export_folder(&mut self) -> Result<DialogSelection<PathBuf>, PlatformError> {
@@ -157,6 +171,27 @@ fn normalized_existing_backup_target_requires_confirmation() {
     );
 
     let result = transfers.create_backup(&Store::seed(10), 20).unwrap();
+
+    assert!(matches!(result, Outcome::Cancelled));
+    assert_eq!(dialogs.confirmed_path(), Some(normalized.clone()));
+    assert_eq!(std::fs::read(normalized).unwrap(), b"existing");
+}
+
+#[test]
+fn normalized_existing_note_target_requires_confirmation() {
+    let directory = TestDirectory::new("note-confirm");
+    let selected = directory.path().join("draft");
+    let normalized = directory.path().join("draft.md");
+    std::fs::write(&normalized, b"existing").unwrap();
+    let dialogs = FakeDialogs::note(selected, false);
+    let mut transfers = FilesystemTransfers::new(
+        Box::new(dialogs.clone()),
+        directory.path().join("safety"),
+        "test",
+    );
+    let note = Store::seed(10).notes.remove(0);
+
+    let result = transfers.export_note(&note).unwrap();
 
     assert!(matches!(result, Outcome::Cancelled));
     assert_eq!(dialogs.confirmed_path(), Some(normalized.clone()));

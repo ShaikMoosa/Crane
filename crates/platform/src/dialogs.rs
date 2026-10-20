@@ -73,7 +73,7 @@ impl DialogProvider for NativeDialogs {
             .map(|value| value.to_string_lossy())
             .unwrap_or_default();
         let result = rfd::MessageDialog::new()
-            .set_title("Replace existing backup?")
+            .set_title("Replace existing file?")
             .set_description(format!("A file named {name} already exists. Replace it?"))
             .set_buttons(rfd::MessageButtons::OkCancel)
             .show();

@@ -1,8 +1,9 @@
 use crate::draft::{Draft, DraftCoordinator};
 use crate::settings::SettingsController;
 use crate::theme;
+use crate::transfers::{TransferController, TransferEffect, TransferState};
 use crate::view_state::{layout_mode, LayoutMode, ViewState};
-use crate::views::{editor, library, note_list};
+use crate::views::{editor, library, note_list, restore};
 use crate::worker::{spawn_worker, WorkerHandle, WorkerRequest, WorkerResult};
 use crane_application::{
     AppError, Command, CommandData, ErrorCode, Library, LibrarySnapshot, NoteState,
@@ -85,6 +86,9 @@ pub struct CraneApp {
     mobile_pane: MobilePane,
     saved_at: Option<Instant>,
     fonts_configured: bool,
+    transfers: TransferController,
+    data_menu_open: bool,
+    request_restore_cancel_focus: bool,
 }
 
 impl CraneApp {
@@ -176,6 +180,9 @@ impl CraneApp {
             mobile_pane,
             saved_at: None,
             fonts_configured: false,
+            transfers: TransferController::default(),
+            data_menu_open: false,
+            request_restore_cancel_focus: false,
         }
     }
 
@@ -189,12 +196,14 @@ impl CraneApp {
         self.apply_theme(ui.ctx());
         self.handle_shortcuts(ui.ctx());
 
+        let request_data_focus = self.transfers.take_data_focus_request();
+
         let mode = layout_mode(ui.available_width());
         if mode == LayoutMode::SinglePane {
             match self.mobile_pane {
                 MobilePane::Library => {
                     theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
-                    self.show_library(ui, false);
+                    self.show_library(ui, false, request_data_focus);
                 }
                 MobilePane::NoteList => {
                     theme::paint_pane(ui, theme::PaneKind::NoteList, self.settings.value().theme);
@@ -223,7 +232,11 @@ impl CraneApp {
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
-                        self.show_library(ui, mode == LayoutMode::CollapsedRail);
+                        self.show_library(
+                            ui,
+                            mode == LayoutMode::CollapsedRail,
+                            request_data_focus,
+                        );
                     },
                 );
                 ui.separator();
@@ -255,8 +268,10 @@ impl CraneApp {
                 );
             });
         }
+        self.show_restore_dialog(ui.ctx());
         self.dispatch_ready_save();
         self.advance_deferred_action();
+        self.dispatch_ready_transfer();
     }
 
     pub fn visible_note_ids(&mut self) -> &[String] {
@@ -299,6 +314,7 @@ impl CraneApp {
     pub fn has_pending_work(&self) -> bool {
         !self.pending_requests.is_empty()
             || self.deferred_action.is_some()
+            || self.transfers.has_pending_work()
             || self
                 .draft
                 .as_ref()
@@ -331,15 +347,26 @@ impl CraneApp {
         self.started_at.elapsed().as_millis() as u64
     }
 
-    fn show_library(&mut self, ui: &mut egui::Ui, collapsed: bool) {
+    fn show_library(&mut self, ui: &mut egui::Ui, collapsed: bool, request_data_focus: bool) {
+        let transfer_status = match self.transfers.state() {
+            TransferState::Flushing => self.transfers.status().or(Some("Saving before transfer…")),
+            TransferState::Running => Some("Transfer in progress…"),
+            _ => self.transfers.status(),
+        };
         let actions = library::show(
             ui,
-            &self.store,
-            self.view.collection,
-            self.view.tag.as_deref(),
-            self.settings.value().theme,
-            self.settings.value().reduced_motion,
-            collapsed,
+            library::LibraryView {
+                store: &self.store,
+                active_collection: self.view.collection,
+                active_tag: self.view.tag.as_deref(),
+                theme: self.settings.value().theme,
+                reduced_motion: self.settings.value().reduced_motion,
+                collapsed,
+                mutations_enabled: self.transfers.can_mutate(),
+                data_menu_open: &mut self.data_menu_open,
+                request_data_focus,
+                transfer_status,
+            },
         );
         if actions.create {
             self.request_after_save(DeferredAction::Create);
@@ -361,6 +388,15 @@ impl CraneApp {
             let mut candidate = self.settings.value().clone();
             candidate.reduced_motion = value;
             self.persist_settings(candidate);
+        }
+        if let Some(action) = actions.transfer {
+            let command = match action {
+                library::DataAction::ImportMarkdown => Command::ImportMarkdown,
+                library::DataAction::ExportLibrary => Command::ExportLibrary,
+                library::DataAction::CreateBackup => Command::CreateBackup,
+                library::DataAction::InspectBackup => Command::InspectBackup,
+            };
+            self.begin_transfer(command);
         }
     }
 
@@ -386,7 +422,13 @@ impl CraneApp {
     fn show_editor(&mut self, ui: &mut egui::Ui) {
         let Some(selected_id) = self.view.selected_id.clone() else {
             ui.heading("A quiet place for bright ideas");
-            if ui.button("New note").clicked() {
+            if ui
+                .add_enabled(
+                    self.pending_requests.is_empty() && self.transfers.can_mutate(),
+                    egui::Button::new("New note"),
+                )
+                .clicked()
+            {
                 self.request_after_save(DeferredAction::Create);
             }
             return;
@@ -409,28 +451,44 @@ impl CraneApp {
         let request_focus = std::mem::take(&mut self.request_title_focus);
         let status = self.view.status.clone();
         let now = self.now_millis();
-        let mutation_enabled = self.pending_requests.is_empty();
+        let mutation_enabled = self.pending_requests.is_empty() && self.transfers.can_mutate();
         let Some(draft) = &mut self.draft else {
             return;
         };
-        let actions = ui
-            .add_enabled_ui(mutation_enabled, |ui| {
-                editor::show(
-                    ui,
-                    draft,
-                    editor::NoteFlags {
-                        pinned: note.pinned,
-                        archived: note.archived,
-                        trashed: note.trashed,
-                    },
-                    self.view.preview,
-                    preview_document.as_ref(),
-                    request_focus,
-                    status.as_deref(),
-                )
-            })
-            .inner;
-        if actions.changed {
+        let flags = editor::NoteFlags {
+            pinned: note.pinned,
+            archived: note.archived,
+            trashed: note.trashed,
+        };
+        let actions = if mutation_enabled {
+            editor::show(
+                ui,
+                draft,
+                editor::EditorView {
+                    flags,
+                    preview: self.view.preview,
+                    preview_document: preview_document.as_ref(),
+                    request_title_focus: request_focus,
+                    status: status.as_deref(),
+                    mutations_enabled: true,
+                },
+            )
+        } else {
+            let mut display_draft = draft.clone();
+            editor::show(
+                ui,
+                &mut display_draft,
+                editor::EditorView {
+                    flags,
+                    preview: self.view.preview,
+                    preview_document: preview_document.as_ref(),
+                    request_title_focus: false,
+                    status: status.as_deref(),
+                    mutations_enabled: false,
+                },
+            )
+        };
+        if mutation_enabled && actions.changed {
             draft.mark_edited(now);
             self.preview_cache.key = None;
             ui.ctx()
@@ -438,33 +496,38 @@ impl CraneApp {
                     crate::draft::SAVE_DELAY_MILLIS,
                 ));
         }
-        if actions.save_now {
+        if mutation_enabled && actions.save_now {
             draft.save_now();
         }
         if actions.retry {
             draft.retry();
         }
-        if actions.toggle_preview {
+        if mutation_enabled && actions.toggle_preview {
             self.view.preview = !self.view.preview;
+        }
+        if mutation_enabled && actions.export_note {
+            self.begin_transfer(Command::ExportNote {
+                id: selected_id.clone(),
+            });
         }
         if let Some(error) = actions.link_error {
             self.view.status = Some(error);
         }
-        if actions.toggle_pin {
+        if mutation_enabled && actions.toggle_pin {
             self.request_after_save(DeferredAction::SetState {
                 id: selected_id.clone(),
                 state: NoteState::Pinned,
                 value: !note.pinned,
             });
         }
-        if actions.toggle_archive {
+        if mutation_enabled && actions.toggle_archive {
             self.request_after_save(DeferredAction::SetState {
                 id: selected_id.clone(),
                 state: NoteState::Archived,
                 value: !note.archived,
             });
         }
-        if actions.toggle_trash {
+        if mutation_enabled && actions.toggle_trash {
             self.request_after_save(DeferredAction::SetState {
                 id: selected_id,
                 state: NoteState::Trashed,
@@ -590,11 +653,74 @@ impl CraneApp {
                     draft.return_unsent(request);
                 } else {
                     draft.complete_failure(request.request_id, error.clone());
+                    self.transfers.abort_prerequisite_save();
                 }
             }
             self.view.status = Some(error.message);
         } else {
             self.view.status = Some("Saving…".into());
+        }
+    }
+
+    fn begin_transfer(&mut self, command: Command) {
+        let draft = self.selected_draft().cloned();
+        let result = match draft.as_ref() {
+            Some(draft) => self.transfers.begin(command, draft),
+            None => self.transfers.begin_without_draft(command),
+        };
+        if let Err(error) = result {
+            self.view.status = Some(error.message);
+            return;
+        }
+        if matches!(self.transfers.state(), TransferState::Flushing) {
+            if let Some(draft) = &mut self.draft {
+                if draft.last_error().is_some() {
+                    self.transfers.abort_prerequisite_save();
+                    return;
+                }
+                draft.save_now();
+            }
+        }
+        self.dispatch_ready_save();
+        self.dispatch_ready_transfer();
+    }
+
+    fn dispatch_ready_transfer(&mut self) {
+        let current = self.selected_draft().cloned();
+        let Some(request) = self.transfers.take_ready_request(current.as_ref()) else {
+            return;
+        };
+        if let Err(error) = self.worker.try_send(request.clone()) {
+            let terminal = error.code != ErrorCode::QueueFull;
+            self.transfers.return_unsent(request, error);
+            self.view.status = self.transfers.status().map(str::to_owned);
+            if terminal {
+                self.mobile_pane = MobilePane::Library;
+            }
+        } else {
+            self.view.status = Some("Transfer in progress…".into());
+        }
+    }
+
+    fn show_restore_dialog(&mut self, context: &egui::Context) {
+        let state = self.transfers.state().clone();
+        let action = self.transfers.restore_dialog().map(|model| {
+            restore::show(
+                context,
+                model,
+                std::mem::take(&mut self.request_restore_cancel_focus),
+            )
+        });
+        match (action, state) {
+            (
+                Some(restore::RestoreAction::Confirm),
+                TransferState::AwaitingConfirmation { token, .. },
+            ) => self.begin_transfer(Command::RestoreBackup { token }),
+            (
+                Some(restore::RestoreAction::Cancel),
+                TransferState::AwaitingConfirmation { token, .. },
+            ) => self.begin_transfer(Command::CancelRestore { token }),
+            _ => {}
         }
     }
 
@@ -614,7 +740,24 @@ impl CraneApp {
 
     fn poll_worker(&mut self) {
         while let Some(result) = self.worker.try_recv() {
-            self.accept_worker_result(result);
+            if self.transfers.owns_request(result.request_id) {
+                let was_inspection = matches!(self.transfers.state(), TransferState::Running);
+                let effect = self.transfers.complete(result);
+                if matches!(
+                    self.transfers.state(),
+                    TransferState::AwaitingConfirmation { .. }
+                ) {
+                    self.request_restore_cancel_focus = was_inspection;
+                } else {
+                    self.mobile_pane = MobilePane::Library;
+                }
+                if let TransferEffect::ReplaceStore(store) = effect {
+                    self.replace_store(store);
+                }
+                self.view.status = self.transfers.status().map(str::to_owned);
+            } else {
+                self.accept_worker_result(result);
+            }
         }
         if let Some(draft) = &self.draft {
             let current_id = draft.current().note_id.clone();
@@ -625,6 +768,25 @@ impl CraneApp {
                 self.preview_cache.key = None;
             }
         }
+    }
+
+    fn replace_store(&mut self, store: Store) {
+        self.store = store;
+        self.store_revision = self.store_revision.saturating_add(1);
+        self.query_cache.key = None;
+        self.preview_cache.key = None;
+        let selected = self
+            .view
+            .selected_id
+            .as_deref()
+            .and_then(|id| self.store.notes.iter().find(|note| note.id == id))
+            .or_else(|| {
+                query_note_ids(&self.store, &self.view.filter())
+                    .first()
+                    .and_then(|id| self.store.notes.iter().find(|note| note.id == *id))
+            });
+        self.view.selected_id = selected.map(|note| note.id.clone());
+        self.draft = selected.map(|note| DraftCoordinator::new(draft_from_note(note)));
     }
 
     fn accept_worker_result(&mut self, result: WorkerResult) {
@@ -638,6 +800,7 @@ impl CraneApp {
             if let Some(draft) = &mut self.draft {
                 draft.complete(result);
                 if let Some(error) = draft.last_error() {
+                    self.transfers.abort_prerequisite_save();
                     self.view.status = Some(error.message.clone());
                     self.saved_at = None;
                 } else {
@@ -744,6 +907,9 @@ impl CraneApp {
     }
 
     fn handle_shortcuts(&mut self, context: &egui::Context) {
+        if self.transfers.restore_dialog().is_some() {
+            return;
+        }
         let (new_note, save, preview, search, escape) = context.input(|input| {
             let primary_modifier = input.modifiers.command || input.modifiers.ctrl;
             (
@@ -754,19 +920,19 @@ impl CraneApp {
                 input.key_pressed(egui::Key::Escape),
             )
         });
-        if new_note {
+        if new_note && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::Create);
         }
-        if save {
+        if save && self.transfers.can_mutate() {
             self.save_now();
         }
-        if preview {
+        if preview && self.transfers.can_mutate() {
             self.view.preview = !self.view.preview;
         }
-        if search {
+        if search && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::FocusSearch);
         }
-        if escape {
+        if escape && self.transfers.can_mutate() {
             let target = match self.mobile_pane {
                 MobilePane::Editor => MobilePane::NoteList,
                 MobilePane::NoteList => MobilePane::Library,
@@ -789,6 +955,7 @@ impl CraneApp {
         self.poll_worker();
         self.dispatch_ready_save();
         self.advance_deferred_action();
+        self.dispatch_ready_transfer();
         if self.draft.as_ref().is_some_and(DraftCoordinator::can_close) {
             context.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if let Some(delay) = self

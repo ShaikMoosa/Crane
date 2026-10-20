@@ -1,4 +1,4 @@
-use crane_application::{AppError, Environment, Library, LibraryRepository};
+use crane_application::{AppError, Environment, Library, LibraryRepository, TransferIo};
 use crane_desktop::app::CraneApp;
 use crane_domain::{Note, Store};
 use std::sync::{Arc, Mutex};
@@ -52,13 +52,29 @@ pub fn note(id: &str, title: &str, body: &str, updated_at: u64) -> Note {
     }
 }
 
+#[allow(dead_code)]
 pub fn app(notes: Vec<Note>) -> (CraneApp, Arc<Mutex<Store>>) {
+    app_with_optional_transfers(notes, None)
+}
+
+#[allow(dead_code)]
+pub fn app_with_transfers(
+    notes: Vec<Note>,
+    transfers: Box<dyn TransferIo>,
+) -> (CraneApp, Arc<Mutex<Store>>) {
+    app_with_optional_transfers(notes, Some(transfers))
+}
+
+fn app_with_optional_transfers(
+    notes: Vec<Note>,
+    transfers: Option<Box<dyn TransferIo>>,
+) -> (CraneApp, Arc<Mutex<Store>>) {
     let shared = Arc::new(Mutex::new(Store {
         schema_version: 1,
         notes,
         extensions: Default::default(),
     }));
-    let library = Library::open(
+    let mut library = Library::open(
         Box::new(SharedRepository(shared.clone())),
         Box::new(TestEnvironment {
             now: 10_000,
@@ -66,6 +82,9 @@ pub fn app(notes: Vec<Note>) -> (CraneApp, Arc<Mutex<Store>>) {
         }),
     )
     .unwrap();
+    if let Some(transfers) = transfers {
+        library = library.with_transfers(transfers);
+    }
     let snapshot = library.snapshot();
     (
         CraneApp::new_with_wake(library, snapshot, Box::new(|| {})),

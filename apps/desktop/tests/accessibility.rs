@@ -2,7 +2,10 @@ mod common;
 
 use common::{app, note};
 use eframe::egui::{accesskit::Role, Key};
-use egui_kittest::{kittest::Queryable, Harness};
+use egui_kittest::{
+    kittest::{NodeT, Queryable},
+    Harness,
+};
 
 #[test]
 fn every_primary_interactive_control_has_an_accessible_name() {
@@ -33,6 +36,40 @@ fn every_primary_interactive_control_has_an_accessible_name() {
     harness.get_by_role_and_label(Role::TextInput, "Search notes");
     harness.get_by_role_and_label(Role::TextInput, "Note title");
     harness.get_by_role_and_label(Role::MultilineTextInput, "Note body");
+}
+
+#[test]
+fn data_disclosure_reports_state_and_transfer_targets_are_at_least_44_points() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let data = harness.get_by_role_and_label(Role::DisclosureTriangle, "Data");
+    assert_eq!(data.accesskit_node().data().is_expanded(), Some(false));
+    assert!(data.rect().width() >= 44.0 && data.rect().height() >= 44.0);
+
+    data.click();
+    harness.run();
+
+    let data = harness.get_by_role_and_label(Role::DisclosureTriangle, "Data");
+    assert_eq!(data.accesskit_node().data().is_expanded(), Some(true));
+    for label in [
+        "Import Markdown…",
+        "Export library…",
+        "Create backup…",
+        "Restore backup…",
+    ] {
+        let action = harness.get_by_role_and_label(Role::Button, label);
+        assert!(
+            action.rect().width() >= 44.0 && action.rect().height() >= 44.0,
+            "{label} was smaller than a 44-point target: {:?}",
+            action.rect()
+        );
+    }
+
+    let export = harness.get_by_role_and_label(Role::Button, "Export note");
+    assert!(export.rect().width() >= 44.0 && export.rect().height() >= 44.0);
 }
 
 #[test]

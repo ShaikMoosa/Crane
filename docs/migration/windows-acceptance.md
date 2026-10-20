@@ -14,6 +14,10 @@ This is the physical-device gate for the native writing interface. Automated tes
 | Query and preview caching | navigation/editor cache tests | Pass |
 | Settings safety | `crane-storage --test settings` | Pass |
 | Safe outbound links | `crane-platform::links::only_http_schemes_are_accepted` | Pass |
+| Transfer sequencing and mutation lock | `apps/desktop/tests/transfers.rs` | Pass |
+| Restore confirmation, failure recovery, and focus return | `apps/desktop/tests/restore_dialog.rs` | Pass |
+| Data disclosure, dialog identity, focus containment, and 44-point transfer targets | `apps/desktop/tests/accessibility.rs`; `apps/desktop/tests/restore_dialog.rs` | Pass |
+| Normalized note/backup overwrite confirmation contract | `crates/storage/tests/transfers.rs` | Pass |
 
 The headless egui harness intentionally permits tofu for glyphs absent from its small embedded test font set. The test still verifies that Unicode Markdown is retained and persisted exactly. The production binary enables eframe's local system-font provider plus licensed egui fallbacks and does not fetch fonts from the network.
 
@@ -31,8 +35,26 @@ Run these against an isolated preview data directory. Record Windows version, di
 - [ ] Disconnect networking and verify theme changes, local font fallbacks, Markdown preview, persistence, and restart remain functional.
 - [ ] Verify reduced motion removes the one-shot save feedback transition once that visual transition is enabled.
 
+## Physical transfer checks still required
+
+Use only these disposable locations when this checklist is executed:
+
+- Preview library: `artifacts/test-data/native-transfers/library`
+- Markdown inputs: `artifacts/test-data/native-transfers/import`
+- Export destination: `artifacts/test-data/native-transfers/export`
+- Backup destination: `artifacts/test-data/native-transfers/backups`
+
+These locations are reserved for the future physical run; they were not used or marked as evidence by the headless UI and adapter tests.
+
+- [ ] Exercise the native multi-file Markdown picker, including quiet cancellation and one invalid file aborting the batch.
+- [ ] Export an active, archived, and explicitly selected trashed note through the native save dialog; verify `.md` normalization and overwrite behavior.
+- [ ] Export the library through the native folder picker; verify active notes under `Notes/`, archived notes under `Archive/`, and trash exclusion.
+- [ ] Create a complete backup through the native save dialog, including normalized overwrite confirmation and quiet cancellation.
+- [ ] Inspect and cancel restore, then inspect and confirm restore; verify all counts, the pre-restore safety backup, and the replacement library after restart.
+- [ ] Inject safety-backup and replacement-write failures against the disposable library and verify the previous library remains readable.
+
 ## Known parity decision
 
-Native spellcheck is not established in the egui editor. Advancing beyond this milestone requires an explicit product decision to defer spellcheck or a separately designed native implementation. No current document claims spellcheck parity.
+Native spellcheck is not established in the egui editor. On 2026-10-20 the user approved deferring native spellcheck to a separately designed future feature so the staged migration can continue. Crane does not claim spellcheck parity in this migration.
 
 The Codex computer-control surface used for this implementation does not enumerate the native eframe window, so these physical checks remain open. A successful build, AccessKit test, or wgpu launch is not recorded as a manual pass.

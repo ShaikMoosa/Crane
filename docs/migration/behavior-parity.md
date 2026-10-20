@@ -103,3 +103,11 @@ This matrix records the behavior protected by the released Tauri/DOM implementat
 - `apps/desktop/tests/accessibility.rs` queries every primary interactive control by role and name and traverses the native Tab order into search and the note body.
 - `crates/storage/tests/settings.rs` covers missing defaults, round trips, future-schema rejection, and synthetic atomic replacement failure without changing the previous settings file.
 - The remaining physical Windows checks and the spellcheck parity decision are tracked in `docs/migration/windows-acceptance.md`; they are not inferred from automated coverage.
+
+## Native Task 8 evidence
+
+- `apps/desktop/tests/transfers.rs` covers dirty-draft transfer gating and failed-save abort/retry, silent cancellation, duplicate activation, recoverable and terminal worker-send failures, useful error retention, committed-store refresh, explicit export of a selected trashed note, and mutation locking during a delayed import including the empty-editor create path.
+- `apps/desktop/tests/restore_dialog.rs` covers a named dialog role and contained Tab focus, backup date/state counts, explicit replacement copy, Cancel focus, Escape cancellation, exact one-use tokens, disabled dismissal during replacement, failed safety-backup recovery, committed-store replacement, and focus return to Data.
+- `apps/desktop/tests/accessibility.rs` verifies the Data disclosure's expanded state and 44-point transfer targets. `crates/storage/tests/transfers.rs` verifies that normalized note and backup destinations require overwrite confirmation before publication.
+- `crates/application/tests/transfers.rs` remains the typed-command authority for token expiry/revocation and transactional replacement. `crates/storage/tests/transfers.rs` remains the filesystem authority for bounded reads, normalized destinations, exclusive publication, cleanup, archive placement, and trash exclusion.
+- Native file-picker, folder-picker, save-dialog, overwrite-prompt, and on-disk restart checks remain open in `docs/migration/windows-acceptance.md`; automated fake adapters do not satisfy that physical-device gate.
