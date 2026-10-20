@@ -1,0 +1,26 @@
+[package]
+name = "crane-desktop"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "crane_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crane"
+path = "src/main.rs"
+
+[dependencies]
+crane-application = { path = "../../crates/application" }
+crane-domain = { path = "../../crates/domain" }
+crane-platform = { path = "../../crates/platform" }
+crane-storage = { path = "../../crates/storage" }
+eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "system_fonts", "wgpu_no_default_features"] }
+
+[target.'cfg(windows)'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
+
+[dev-dependencies]
+egui_kittest = { version = "=0.37.0", default-features = false }
