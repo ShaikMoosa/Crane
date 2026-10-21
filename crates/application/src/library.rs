@@ -3,6 +3,7 @@ use crate::{
     AppError, Command, CommandData, CommandResult, Environment, ErrorCode, LibraryRepository,
     NoteState, Outcome, TransferIo,
 };
+use crane_domain::knowledge::KnowledgeIndex;
 use crane_domain::{
     extract_tags, inspect_backup, prepare_import, validate_note, validate_store, Note, Store,
     SCHEMA_VERSION,
@@ -21,6 +22,7 @@ pub struct Library {
     revision: u64,
     transfers: Option<Box<dyn TransferIo>>,
     pending_restore: Option<PendingRestore>,
+    index: KnowledgeIndex,
 }
 
 impl Library {
@@ -36,10 +38,12 @@ impl Library {
             ));
         }
         validate_store(&store)?;
+        let index = KnowledgeIndex::build(&store);
         Ok(Self {
             repository,
             environment,
             store,
+            index,
             revision: 0,
             transfers: None,
             pending_restore: None,
@@ -53,6 +57,10 @@ impl Library {
 
     pub fn execute(&mut self, command: Command) -> Result<CommandResult, AppError> {
         match command {
+            Command::CreateNoteWithTitle { title } => {
+                let (candidate, data) = self.prepare_create_with_title(title)?;
+                self.commit_candidate(candidate, data)
+            }
             Command::CreateNote => {
                 let (candidate, data) = self.prepare_create()?;
                 self.commit_candidate(candidate, data)
@@ -88,6 +96,15 @@ impl Library {
         validate_store(&candidate)?;
         self.repository.commit(&candidate)?;
         self.store = candidate;
+        match &data {
+            CommandData::Created(note) => self.index.replace_note(note),
+            CommandData::StateChanged(note) => self.index.update_visibility(note),
+            CommandData::Saved { note, .. } => self.index.replace_note(note),
+            CommandData::Imported { store, .. } | CommandData::Restored(store) => {
+                self.index = KnowledgeIndex::build(store);
+            }
+            _ => {}
+        }
         self.revision = self.revision.saturating_add(1);
         Ok(CommandResult {
             revision: self.revision,
@@ -95,11 +112,45 @@ impl Library {
         })
     }
 
+    pub fn knowledge_index(&self) -> &KnowledgeIndex {
+        &self.index
+    }
+
     pub fn snapshot(&self) -> LibrarySnapshot {
         LibrarySnapshot {
             store: self.store.clone(),
             revision: self.revision,
         }
+    }
+
+    fn prepare_create_with_title(
+        &mut self,
+        title: String,
+    ) -> Result<(Store, CommandData), AppError> {
+        let title = title.trim().to_string();
+        if title.is_empty() {
+            return Err(AppError::new(
+                ErrorCode::Validation,
+                "A note title is required.",
+            ));
+        }
+        let timestamp = self.environment.now_millis();
+        let note = Note {
+            id: self.environment.new_note_id(),
+            title,
+            body: String::new(),
+            tags: Vec::new(),
+            created_at: timestamp,
+            updated_at: timestamp,
+            pinned: false,
+            archived: false,
+            trashed: false,
+            extensions: Default::default(),
+        };
+        validate_note(&note)?;
+        let mut candidate = self.store.clone();
+        candidate.notes.push(note.clone());
+        Ok((candidate, CommandData::Created(note)))
     }
 
     fn prepare_create(&mut self) -> Result<(Store, CommandData), AppError> {
@@ -266,6 +317,7 @@ impl Library {
         validate_store(&pending.replacement)?;
         self.repository.commit(&pending.replacement)?;
         self.store = pending.replacement;
+        self.index = KnowledgeIndex::build(&self.store);
         self.revision = self.revision.saturating_add(1);
         Ok(self.result(CommandData::Restored(self.store.clone())))
     }

@@ -149,9 +149,6 @@ impl KnowledgeIndex {
             .get(&facts.normalized_title)
             .cloned()
             .unwrap_or_default()
-            .into_iter()
-            .filter(|link| link.source_note_id != note_id || true)
-            .collect()
     }
 
     fn insert_note(&mut self, note: &Note) {

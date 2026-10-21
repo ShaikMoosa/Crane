@@ -3,6 +3,9 @@ use crane_domain::{BackupInspection, Note, Store};
 #[derive(Clone, Debug)]
 pub enum Command {
     CreateNote,
+    CreateNoteWithTitle {
+        title: String,
+    },
     SaveNote {
         id: String,
         title: String,

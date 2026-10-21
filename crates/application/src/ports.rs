@@ -17,6 +17,12 @@ pub trait Environment: Send {
     fn now_millis(&self) -> u64;
     fn monotonic_millis(&self) -> u64;
     fn new_note_id(&mut self) -> String;
+    /// Local calendar day containing `now_millis`, as `[start, end)` epoch millis.
+    fn local_day_bounds_millis(&self) -> (u64, u64) {
+        const DAY: u64 = 86_400_000;
+        let start = self.now_millis() / DAY * DAY;
+        (start, start.saturating_add(DAY))
+    }
 }
 
 pub trait TransferIo: Send {

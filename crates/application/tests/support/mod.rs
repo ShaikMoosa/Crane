@@ -63,15 +63,22 @@ pub struct FakeEnvironment {
     now_ms: u64,
     monotonic_ms: u64,
     next_id: u64,
+    day_bounds: (u64, u64),
 }
 
 #[allow(dead_code)]
 impl FakeEnvironment {
+    pub fn with_day_bounds(mut self, bounds: (u64, u64)) -> Self {
+        self.day_bounds = bounds;
+        self
+    }
+
     pub fn new(now_ms: u64, monotonic_ms: u64) -> Self {
         Self {
             now_ms,
             monotonic_ms,
             next_id: 1,
+            day_bounds: (0, u64::MAX),
         }
     }
 }
@@ -83,6 +90,10 @@ impl Environment for FakeEnvironment {
 
     fn monotonic_millis(&self) -> u64 {
         self.monotonic_ms
+    }
+
+    fn local_day_bounds_millis(&self) -> (u64, u64) {
+        self.day_bounds
     }
 
     fn new_note_id(&mut self) -> String {
