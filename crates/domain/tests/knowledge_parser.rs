@@ -62,7 +62,8 @@ fn code_spans_and_fences_hide_links() {
 
 #[test]
 fn headings_carry_levels_text_anchors_and_ranges() {
-    let body = "# Title\n\n## On the desk\n\n## On the desk\n\n## Intro-2\n\n####### Not a heading\n";
+    let body =
+        "# Title\n\n## On the desk\n\n## On the desk\n\n## Intro-2\n\n####### Not a heading\n";
     let headings = parse_headings(body);
     assert_eq!(headings.len(), 4);
     assert_eq!(headings[0].level, 1);
