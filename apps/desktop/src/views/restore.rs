@@ -20,7 +20,7 @@ pub fn show(
         ui.heading("Restore Crane backup");
         ui.label(format!(
             "Backup date: {}",
-            format_backup_date(model.inspection.created_at)
+            format_timestamp_millis(model.inspection.created_at)
         ));
         ui.label(format!(
             "{} total · {} active · {} archived · {} trash",
@@ -58,7 +58,7 @@ pub fn show(
     }
 }
 
-fn format_backup_date(timestamp_millis: u64) -> String {
+pub(crate) fn format_timestamp_millis(timestamp_millis: u64) -> String {
     let seconds = (timestamp_millis / 1_000).min(i64::MAX as u64) as i64;
     let days = seconds / 86_400;
     let seconds_in_day = seconds % 86_400;

@@ -1,4 +1,7 @@
 use crate::draft::{Draft, DraftCoordinator};
+use crate::knowledge_navigation::{
+    ChooserIntent, ChooserState, CompletionState, KnowledgeNavIntent,
+};
 use crate::quick_open::{QuickOpenIntent, QuickOpenState};
 use crate::settings::SettingsController;
 use crate::sidebar::{SidebarIntent, SidebarState, SidebarView};
@@ -7,11 +10,13 @@ use crate::transfers::{TransferController, TransferEffect, TransferState};
 use crate::view_state::{layout_mode, LayoutMode, ViewState};
 use crate::views::{editor, library, note_list, restore};
 use crate::worker::{spawn_worker, WorkerHandle, WorkerOutcome, WorkerRequest, WorkerResult};
-use crane_application::knowledge::{CollectionView, Query, QueryData, SidebarCounts};
+use crane_application::knowledge::{
+    CollectionView, Query, QueryData, ResolutionView, SidebarCounts,
+};
 use crane_application::{
     AppError, Command, CommandData, ErrorCode, Library, LibrarySnapshot, NoteState,
 };
-use crane_domain::knowledge::TagNode;
+use crane_domain::knowledge::{HeadingResolution, TagNode, WikiLink};
 use crane_domain::{parse_preview, MarkdownDocument, Note, Store};
 use crane_storage::{NativeSettings, ThemeChoice};
 use eframe::egui;
@@ -40,6 +45,8 @@ enum PendingQuery {
     TagTree,
     Counts,
     QuickOpen(u64),
+    CompleteWikiLink(u64),
+    ResolveWikiLink(u64),
 }
 
 #[derive(Default)]
@@ -55,9 +62,23 @@ enum MobilePane {
     Editor,
 }
 
+#[derive(Clone, Debug)]
+struct PendingWikiJump {
+    note_id: String,
+    byte_offset: usize,
+    anchor: String,
+}
+
 enum DeferredAction {
     Create,
     Select(String),
+    Navigate {
+        note_id: String,
+        heading: Option<HeadingResolution>,
+    },
+    CreateTitled {
+        title: String,
+    },
     ChangeFilter {
         collection: CollectionView,
         tag: Option<String>,
@@ -108,6 +129,12 @@ pub struct CraneApp {
     counts_revision: Option<u64>,
     quick_open: QuickOpenState,
     request_body_focus: bool,
+    completion: CompletionState,
+    chooser: ChooserState,
+    resolve_sequence: u64,
+    resolve_link: Option<WikiLink>,
+    pending_wiki_jump: Option<PendingWikiJump>,
+    preview_scroll_anchor: Option<String>,
 }
 
 impl CraneApp {
@@ -203,6 +230,12 @@ impl CraneApp {
             counts_revision: None,
             quick_open: QuickOpenState::default(),
             request_body_focus: false,
+            completion: CompletionState::default(),
+            chooser: ChooserState::default(),
+            resolve_sequence: 0,
+            resolve_link: None,
+            pending_wiki_jump: None,
+            preview_scroll_anchor: None,
         }
     }
 
@@ -291,6 +324,7 @@ impl CraneApp {
         }
         self.show_restore_dialog(ui.ctx());
         self.show_quick_open(ui.ctx());
+        self.show_chooser(ui.ctx());
         self.dispatch_ready_save();
         self.advance_deferred_action();
         self.dispatch_ready_transfer();
@@ -315,6 +349,67 @@ impl CraneApp {
         if let Some(QuickOpenIntent::OpenNote(note_id)) = intent {
             self.request_body_focus = true;
             self.request_after_save(DeferredAction::Select(note_id));
+        }
+    }
+
+    fn show_chooser(&mut self, ctx: &egui::Context) {
+        if !self.chooser.open {
+            return;
+        }
+        let intent = crate::knowledge_navigation::show_chooser(ctx, &mut self.chooser);
+        match intent {
+            Some(ChooserIntent::OpenNote(note_id)) => {
+                self.apply_nav_intent(KnowledgeNavIntent::OpenNote {
+                    note_id,
+                    heading: None,
+                });
+            }
+            Some(ChooserIntent::CreateNote(title)) => {
+                self.apply_nav_intent(KnowledgeNavIntent::CreateNote { title });
+            }
+            Some(ChooserIntent::Close) | None => {}
+        }
+    }
+
+    fn apply_nav_intent(&mut self, intent: KnowledgeNavIntent) {
+        match intent {
+            KnowledgeNavIntent::OpenNote { note_id, heading } => {
+                self.request_body_focus = true;
+                self.request_after_save(DeferredAction::Navigate { note_id, heading });
+            }
+            KnowledgeNavIntent::CreateNote { title } => {
+                self.request_after_save(DeferredAction::CreateTitled { title });
+            }
+        }
+    }
+
+    fn apply_resolution(&mut self, view: ResolutionView) {
+        match view {
+            ResolutionView::Resolved { note_id, heading } => {
+                self.apply_nav_intent(KnowledgeNavIntent::OpenNote {
+                    note_id,
+                    heading: Some(heading),
+                });
+            }
+            ResolutionView::Unresolved { target_title } => {
+                crate::knowledge_navigation::open_chooser(
+                    &mut self.chooser,
+                    target_title,
+                    Vec::new(),
+                );
+            }
+            ResolutionView::Ambiguous { candidates } => {
+                let title = candidates
+                    .first()
+                    .map(|candidate| candidate.title.clone())
+                    .or_else(|| {
+                        self.resolve_link
+                            .as_ref()
+                            .map(|link| link.target_title.clone())
+                    })
+                    .unwrap_or_default();
+                crate::knowledge_navigation::open_chooser(&mut self.chooser, title, candidates);
+            }
         }
     }
 
@@ -441,6 +536,20 @@ impl CraneApp {
             {
                 self.quick_open.active = self.quick_open.active.min(hits.len().saturating_sub(1));
                 self.quick_open.hits = hits;
+            }
+            (PendingQuery::CompleteWikiLink(sequence), QueryData::Completion(candidates))
+                if sequence == self.completion.sequence =>
+            {
+                self.completion.active = self
+                    .completion
+                    .active
+                    .min(candidates.len().saturating_sub(1));
+                self.completion.candidates = candidates;
+            }
+            (PendingQuery::ResolveWikiLink(sequence), QueryData::Resolution(view))
+                if sequence == self.resolve_sequence =>
+            {
+                self.apply_resolution(view);
             }
             _ => {}
         }
@@ -663,15 +772,43 @@ impl CraneApp {
         let status = self.view.status.clone();
         let now = self.now_millis();
         let mutation_enabled = self.pending_requests.is_empty() && self.transfers.can_mutate();
+        let scroll_anchor = if self.view.preview {
+            self.preview_scroll_anchor.take()
+        } else {
+            None
+        };
         let Some(draft) = &mut self.draft else {
             return;
         };
+        let mut caret_jump = None;
+        if self
+            .pending_wiki_jump
+            .as_ref()
+            .is_some_and(|jump| jump.note_id == draft.current().note_id)
+        {
+            let jump = self
+                .pending_wiki_jump
+                .take()
+                .expect("wiki jump checked above");
+            if self.view.preview {
+                self.preview_scroll_anchor = Some(jump.anchor);
+            } else {
+                caret_jump = Some(crate::knowledge_navigation::byte_to_char(
+                    &draft.current().body,
+                    jump.byte_offset,
+                ));
+            }
+        }
         let flags = editor::NoteFlags {
             pinned: note.pinned,
             archived: note.archived,
             trashed: note.trashed,
         };
+        let mut completion_outgoing = None;
         let actions = if mutation_enabled {
+            let mut emit = |query: Query| {
+                completion_outgoing = Some(query);
+            };
             editor::show(
                 ui,
                 draft,
@@ -679,10 +816,16 @@ impl CraneApp {
                     flags,
                     preview: self.view.preview,
                     preview_document: preview_document.as_ref(),
+                    preview_scroll_anchor: scroll_anchor.as_deref(),
                     request_title_focus: request_focus,
                     request_body_focus,
+                    caret_jump,
                     status: status.as_deref(),
                     mutations_enabled: true,
+                    completion: Some(editor::CompletionView {
+                        state: &mut self.completion,
+                        emit_query: &mut emit,
+                    }),
                 },
             )
         } else {
@@ -694,10 +837,13 @@ impl CraneApp {
                     flags,
                     preview: self.view.preview,
                     preview_document: preview_document.as_ref(),
+                    preview_scroll_anchor: scroll_anchor.as_deref(),
                     request_title_focus: false,
                     request_body_focus: false,
+                    caret_jump: None,
                     status: status.as_deref(),
                     mutations_enabled: false,
+                    completion: None,
                 },
             )
         };
@@ -746,6 +892,19 @@ impl CraneApp {
                 state: NoteState::Trashed,
                 value: !note.trashed,
             });
+        }
+        if let Some(query) = completion_outgoing {
+            let sequence = self.completion.sequence;
+            self.send_query(query, PendingQuery::CompleteWikiLink(sequence));
+        }
+        if let Some(link) = actions.wiki_link {
+            self.resolve_link = Some(link.clone());
+            self.resolve_sequence = self.resolve_sequence.saturating_add(1);
+            let sequence = self.resolve_sequence;
+            self.send_query(
+                Query::ResolveWikiLink { link },
+                PendingQuery::ResolveWikiLink(sequence),
+            );
         }
     }
 
@@ -828,6 +987,29 @@ impl CraneApp {
                 self.view.status = Some("Creating note…".into());
             }
             DeferredAction::Select(id) => self.select_note(&id),
+            DeferredAction::Navigate { note_id, heading } => {
+                self.select_note(&note_id);
+                match heading {
+                    Some(HeadingResolution::Found { anchor, range }) => {
+                        self.pending_wiki_jump = Some(PendingWikiJump {
+                            note_id,
+                            byte_offset: range.start,
+                            anchor,
+                        });
+                    }
+                    Some(HeadingResolution::Missing) => {
+                        self.view.status = Some("Heading not found".into());
+                    }
+                    Some(HeadingResolution::NotRequested) | None => {}
+                }
+            }
+            DeferredAction::CreateTitled { title } => {
+                self.dispatch(
+                    Command::CreateNoteWithTitle { title },
+                    PendingCommand::Create,
+                );
+                self.view.status = Some("Creating note…".into());
+            }
             DeferredAction::ChangeFilter { collection, tag } => {
                 self.view.collection = collection;
                 self.view.tag = tag;
@@ -1161,7 +1343,12 @@ impl CraneApp {
         if search && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::FocusSearch);
         }
-        if escape && !self.quick_open.open && self.transfers.can_mutate() {
+        if escape
+            && !self.quick_open.open
+            && !self.chooser.open
+            && !self.completion.popup_visible()
+            && self.transfers.can_mutate()
+        {
             let target = match self.mobile_pane {
                 MobilePane::Editor => MobilePane::NoteList,
                 MobilePane::NoteList => MobilePane::Library,

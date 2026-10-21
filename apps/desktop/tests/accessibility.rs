@@ -110,8 +110,8 @@ fn preview_preserves_nested_link_roles_and_reports_open_failures() {
                         "synthetic link-open failure",
                     ))
                 };
-                if let Some(error) =
-                    crane_desktop::views::preview::show_with_opener(ui, &state.0, &mut opener)
+                if let crane_desktop::views::preview::PreviewAction::HttpError(error) =
+                    crane_desktop::views::preview::show_with_opener(ui, &state.0, &mut opener, None)
                 {
                     state.1 = Some(error);
                 }

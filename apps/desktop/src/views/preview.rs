@@ -1,8 +1,26 @@
+use crane_domain::knowledge::{normalize_heading_anchor, WikiLink};
 use crane_domain::{Inline, MarkdownBlock, MarkdownDocument};
 use eframe::egui::{self, RichText};
 
-pub fn show(ui: &mut egui::Ui, document: &MarkdownDocument) -> Option<String> {
-    show_with_opener(ui, document, &mut crane_platform::open_http_link)
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum PreviewAction {
+    #[default]
+    None,
+    HttpError(String),
+    WikiLink(WikiLink),
+}
+
+pub fn show(
+    ui: &mut egui::Ui,
+    document: &MarkdownDocument,
+    scroll_to_anchor: Option<&str>,
+) -> PreviewAction {
+    show_with_opener(
+        ui,
+        document,
+        &mut crane_platform::open_http_link,
+        scroll_to_anchor,
+    )
 }
 
 #[doc(hidden)]
@@ -10,8 +28,9 @@ pub fn show_with_opener(
     ui: &mut egui::Ui,
     document: &MarkdownDocument,
     opener: &mut impl FnMut(&str) -> Result<(), crane_platform::PlatformError>,
-) -> Option<String> {
-    let mut failure = None;
+    scroll_to_anchor: Option<&str>,
+) -> PreviewAction {
+    let mut action = PreviewAction::None;
     egui::ScrollArea::vertical()
         .id_salt("crane-markdown-preview")
         .show(ui, |ui| {
@@ -19,7 +38,7 @@ pub fn show_with_opener(
                 match block {
                     MarkdownBlock::Heading { level, content } => {
                         let size = (30.0 - f32::from(*level) * 2.0).max(18.0);
-                        ui.horizontal_wrapped(|ui| {
+                        let heading = ui.horizontal_wrapped(|ui| {
                             render_inlines(
                                 ui,
                                 content,
@@ -29,9 +48,14 @@ pub fn show_with_opener(
                                     ..InlineStyle::default()
                                 },
                                 opener,
-                                &mut failure,
+                                &mut action,
                             );
                         });
+                        if scroll_to_anchor.is_some_and(|target| {
+                            normalize_heading_anchor(&inline_text(content)) == target
+                        }) {
+                            ui.scroll_to_rect(heading.response.rect, Some(egui::Align::Min));
+                        }
                     }
                     MarkdownBlock::Paragraph(content) => {
                         ui.horizontal_wrapped(|ui| {
@@ -40,7 +64,7 @@ pub fn show_with_opener(
                                 content,
                                 InlineStyle::default(),
                                 opener,
-                                &mut failure,
+                                &mut action,
                             );
                         });
                     }
@@ -55,7 +79,7 @@ pub fn show_with_opener(
                                     ..InlineStyle::default()
                                 },
                                 opener,
-                                &mut failure,
+                                &mut action,
                             );
                         });
                     }
@@ -80,7 +104,7 @@ pub fn show_with_opener(
                                     &item.content,
                                     InlineStyle::default(),
                                     opener,
-                                    &mut failure,
+                                    &mut action,
                                 );
                             });
                         }
@@ -92,7 +116,7 @@ pub fn show_with_opener(
                 ui.add_space(7.0);
             }
         });
-    failure
+    action
 }
 
 #[derive(Clone, Copy, Default)]
@@ -107,7 +131,7 @@ fn render_inlines(
     inlines: &[Inline],
     style: InlineStyle,
     opener: &mut impl FnMut(&str) -> Result<(), crane_platform::PlatformError>,
-    failure: &mut Option<String>,
+    action: &mut PreviewAction,
 ) {
     for inline in inlines {
         match inline {
@@ -115,7 +139,14 @@ fn render_inlines(
                 ui.label(styled_text(text, style));
             }
             Inline::WikiLink(link) => {
-                ui.label(styled_text(&link.display_text, style));
+                let name = format!("Open linked note: {}", link.display_text);
+                if ui
+                    .link(styled_text(&link.display_text, style))
+                    .accessible_name(&name)
+                    .clicked()
+                {
+                    *action = PreviewAction::WikiLink(link.clone());
+                }
             }
             Inline::Code(text) => {
                 ui.monospace(text);
@@ -129,7 +160,7 @@ fn render_inlines(
                         ..style
                     },
                     opener,
-                    failure,
+                    action,
                 );
             }
             Inline::Strong(children) => {
@@ -141,13 +172,13 @@ fn render_inlines(
                         ..style
                     },
                     opener,
-                    failure,
+                    action,
                 );
             }
             Inline::Link { label, url } => {
                 if ui.link(styled_text(inline_text(label), style)).clicked() {
                     if let Err(error) = opener(url) {
-                        *failure = Some(error.to_string());
+                        *action = PreviewAction::HttpError(error.to_string());
                     }
                 }
             }
