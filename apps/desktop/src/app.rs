@@ -1,4 +1,5 @@
 use crate::draft::{Draft, DraftCoordinator};
+use crate::quick_open::{QuickOpenIntent, QuickOpenState};
 use crate::settings::SettingsController;
 use crate::sidebar::{SidebarIntent, SidebarState, SidebarView};
 use crate::theme;
@@ -38,6 +39,7 @@ enum PendingQuery {
     NoteIds(ListKey),
     TagTree,
     Counts,
+    QuickOpen(u64),
 }
 
 #[derive(Default)]
@@ -104,6 +106,8 @@ pub struct CraneApp {
     tag_tree_revision: Option<u64>,
     counts: SidebarCounts,
     counts_revision: Option<u64>,
+    quick_open: QuickOpenState,
+    request_body_focus: bool,
 }
 
 impl CraneApp {
@@ -197,6 +201,8 @@ impl CraneApp {
             tag_tree_revision: None,
             counts: SidebarCounts::default(),
             counts_revision: None,
+            quick_open: QuickOpenState::default(),
+            request_body_focus: false,
         }
     }
 
@@ -284,9 +290,32 @@ impl CraneApp {
             });
         }
         self.show_restore_dialog(ui.ctx());
+        self.show_quick_open(ui.ctx());
         self.dispatch_ready_save();
         self.advance_deferred_action();
         self.dispatch_ready_transfer();
+    }
+
+    fn show_quick_open(&mut self, ctx: &egui::Context) {
+        if !self.quick_open.open {
+            return;
+        }
+        let mut outgoing = None;
+        let intent = {
+            let state = &mut self.quick_open;
+            let mut emit = |query: Query| {
+                outgoing = Some(query);
+            };
+            crate::quick_open::show(ctx, state, &mut emit)
+        };
+        if let Some(query) = outgoing {
+            let sequence = self.quick_open.sequence;
+            self.send_query(query, PendingQuery::QuickOpen(sequence));
+        }
+        if let Some(QuickOpenIntent::OpenNote(note_id)) = intent {
+            self.request_body_focus = true;
+            self.request_after_save(DeferredAction::Select(note_id));
+        }
     }
 
     pub fn visible_note_ids(&mut self) -> &[String] {
@@ -406,6 +435,12 @@ impl CraneApp {
             (PendingQuery::Counts, QueryData::CollectionCounts(counts)) => {
                 self.counts = counts;
                 self.counts_revision = Some(response.store_revision);
+            }
+            (PendingQuery::QuickOpen(sequence), QueryData::QuickOpen(hits))
+                if sequence == self.quick_open.sequence =>
+            {
+                self.quick_open.active = self.quick_open.active.min(hits.len().saturating_sub(1));
+                self.quick_open.hits = hits;
             }
             _ => {}
         }
@@ -570,7 +605,7 @@ impl CraneApp {
         self.ensure_note_ids();
         let visible = self.visible_note_ids().to_vec();
         let previous_query = self.view.query.clone();
-        let selected = note_list::show(
+        let list_action = note_list::show(
             ui,
             &self.store,
             &visible,
@@ -586,7 +621,10 @@ impl CraneApp {
         if self.view.query != previous_query {
             self.query_cache.key = None;
         }
-        if let Some(id) = selected {
+        if list_action.quick_open {
+            crate::quick_open::open(&mut self.quick_open, self.view.selected_id.clone());
+        }
+        if let Some(id) = list_action.selected {
             self.request_after_save(DeferredAction::Select(id));
         }
     }
@@ -621,6 +659,7 @@ impl CraneApp {
             None
         };
         let request_focus = std::mem::take(&mut self.request_title_focus);
+        let request_body_focus = std::mem::take(&mut self.request_body_focus);
         let status = self.view.status.clone();
         let now = self.now_millis();
         let mutation_enabled = self.pending_requests.is_empty() && self.transfers.can_mutate();
@@ -641,6 +680,7 @@ impl CraneApp {
                     preview: self.view.preview,
                     preview_document: preview_document.as_ref(),
                     request_title_focus: request_focus,
+                    request_body_focus,
                     status: status.as_deref(),
                     mutations_enabled: true,
                 },
@@ -655,6 +695,7 @@ impl CraneApp {
                     preview: self.view.preview,
                     preview_document: preview_document.as_ref(),
                     request_title_focus: false,
+                    request_body_focus: false,
                     status: status.as_deref(),
                     mutations_enabled: false,
                 },
@@ -1090,7 +1131,7 @@ impl CraneApp {
         if self.transfers.restore_dialog().is_some() {
             return;
         }
-        let (new_note, save, preview, search, escape) = context.input(|input| {
+        let (new_note, save, preview, search, escape, quick_open) = context.input(|input| {
             let primary_modifier = input.modifiers.command || input.modifiers.ctrl;
             (
                 primary_modifier && input.key_pressed(egui::Key::N),
@@ -1098,8 +1139,16 @@ impl CraneApp {
                 primary_modifier && input.key_pressed(egui::Key::P),
                 primary_modifier && input.key_pressed(egui::Key::F),
                 input.key_pressed(egui::Key::Escape),
+                primary_modifier && input.key_pressed(egui::Key::O),
             )
         });
+        if self.transfers.restore_dialog().is_none() && quick_open && self.transfers.can_mutate() {
+            if self.quick_open.open {
+                crate::quick_open::close(&mut self.quick_open);
+            } else {
+                crate::quick_open::open(&mut self.quick_open, self.view.selected_id.clone());
+            }
+        }
         if new_note && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::Create);
         }
@@ -1112,7 +1161,7 @@ impl CraneApp {
         if search && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::FocusSearch);
         }
-        if escape && self.transfers.can_mutate() {
+        if escape && !self.quick_open.open && self.transfers.can_mutate() {
             let target = match self.mobile_pane {
                 MobilePane::Editor => MobilePane::NoteList,
                 MobilePane::NoteList => MobilePane::Library,

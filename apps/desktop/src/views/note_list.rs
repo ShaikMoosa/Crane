@@ -1,6 +1,11 @@
 use crane_domain::{Note, Store};
 use eframe::egui;
 
+pub struct NoteListAction {
+    pub selected: Option<String>,
+    pub quick_open: bool,
+}
+
 pub fn show(
     ui: &mut egui::Ui,
     store: &Store,
@@ -9,8 +14,26 @@ pub fn show(
     query: &mut String,
     request_search_focus: bool,
     heading: &str,
-) -> Option<String> {
-    ui.heading(heading);
+) -> NoteListAction {
+    let mut action = NoteListAction {
+        selected: None,
+        quick_open: false,
+    };
+    ui.horizontal(|ui| {
+        ui.heading(heading);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if crate::icons::icon_button(
+                ui,
+                crate::icons::IconId::Search,
+                "Quick Open",
+                "Quick Open",
+            )
+            .clicked()
+            {
+                action.quick_open = true;
+            }
+        });
+    });
     let search = ui
         .add(egui::TextEdit::singleline(query).hint_text("Search notes"))
         .accessible_name("Search notes");
@@ -18,18 +41,17 @@ pub fn show(
         search.request_focus();
     }
     ui.separator();
-    let mut selected = None;
     egui::ScrollArea::vertical().show(ui, |ui| {
         for id in visible_ids {
             let Some(note) = store.notes.iter().find(|note| note.id == *id) else {
                 continue;
             };
             if note_row(ui, note, selected_id == Some(id.as_str())).clicked() {
-                selected = Some(id.clone());
+                action.selected = Some(id.clone());
             }
         }
     });
-    selected
+    action
 }
 
 fn note_row(ui: &mut egui::Ui, note: &Note, selected: bool) -> egui::Response {

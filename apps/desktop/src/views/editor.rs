@@ -31,6 +31,7 @@ pub struct EditorView<'a> {
     pub preview: bool,
     pub preview_document: Option<&'a MarkdownDocument>,
     pub request_title_focus: bool,
+    pub request_body_focus: bool,
     pub status: Option<&'a str>,
     pub mutations_enabled: bool,
 }
@@ -45,6 +46,7 @@ pub fn show(
         preview,
         preview_document,
         request_title_focus,
+        request_body_focus,
         status,
         mutations_enabled,
     } = view;
@@ -141,6 +143,9 @@ pub fn show(
                     .desired_width(body_size.x),
             )
             .accessible_name("Note body");
+        if request_body_focus {
+            body_response.request_focus();
+        }
         actions.changed |= body_response.changed();
     }
 
