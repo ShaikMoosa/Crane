@@ -1,11 +1,13 @@
 pub mod parser;
 pub mod statistics;
+pub mod tags;
 
 pub use parser::{
     normalize_heading_anchor, normalize_title, parse_headings, parse_wiki_links, HeadingFact,
     HeadingTarget, WikiLink,
 };
 pub use statistics::{note_statistics, NoteStatistics};
+pub use tags::{build_tag_tree, tag_in_subtree, TagNode};
 
 use crate::{extract_tags, Note};
 
