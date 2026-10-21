@@ -291,13 +291,12 @@ pub fn icon_button(
         egui::Button::image(icon_image(icon, color, 17.0)),
     );
     let response = response.on_hover_text(tooltip);
-    response
-        .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, accessible_name));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, accessible_name));
     response
 }
 
 fn ensure_image_loaders(ctx: &egui::Context) {
-    let id = egui::Id::new("crane-lucide-loaders");
+    let id = egui::Id::unique("crane-lucide-loaders");
     let done = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(false));
     if !done {
         egui_extras::install_image_loaders(ctx);

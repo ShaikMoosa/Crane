@@ -181,7 +181,7 @@ fn unescape(text: &str) -> String {
     while let Some(ch) = chars.next() {
         if ch == '\\' {
             match chars.peek() {
-                Some(next) if matches!(next, '|' | '#' | ']' | '[' | '\\') => {
+                Some('|') | Some('#') | Some(']') | Some('[') | Some('\\') => {
                     out.push(chars.next().unwrap());
                 }
                 _ => out.push(ch),

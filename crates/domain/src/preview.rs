@@ -415,7 +415,7 @@ fn inline_plain_text(inlines: &[Inline]) -> String {
 
 fn push_text_with_wiki(
     block: &mut Option<BlockBuilder>,
-    frames: &mut Vec<InlineFrame>,
+    frames: &mut [InlineFrame],
     text: String,
     source: &str,
     links: &[crate::knowledge::WikiLink],

@@ -11,7 +11,6 @@ pub struct TagNode {
 
 #[derive(Default)]
 struct Builder {
-    name: String,
     notes: HashSet<usize>,
     children: BTreeMap<String, Builder>,
 }
@@ -31,10 +30,7 @@ pub fn build_tag_tree(tag_sets: &[Vec<String>]) -> Vec<TagNode> {
                     path.push('/');
                 }
                 path.push_str(segment);
-                let entry = level.entry(segment.to_string()).or_insert_with(|| Builder {
-                    name: segment.to_string(),
-                    ..Default::default()
-                });
+                let entry = level.entry(segment.to_string()).or_default();
                 if seen_paths.insert(path.clone()) {
                     entry.notes.insert(note_index);
                 }

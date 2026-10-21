@@ -40,7 +40,7 @@ pub fn note_statistics(body: &str) -> NoteStatistics {
         reading_minutes: if words == 0 {
             0
         } else {
-            ((words as u64) + 199) / 200
+            (words as u64).div_ceil(200)
         },
     }
 }
