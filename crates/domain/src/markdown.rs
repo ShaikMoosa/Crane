@@ -175,6 +175,7 @@ fn collect_excerpt_text(inlines: &[Inline], output: &mut Vec<String>) {
                 collect_excerpt_text(children, output);
             }
             Inline::Code(_) | Inline::ImageAlt(_) => {}
+            Inline::WikiLink(link) => output.push(link.display_text.clone()),
         }
     }
 }

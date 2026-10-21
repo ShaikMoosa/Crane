@@ -32,6 +32,7 @@ pub struct ListItem {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Inline {
+    WikiLink(crate::knowledge::WikiLink),
     Text(String),
     Emphasis(Vec<Inline>),
     Strong(Vec<Inline>),
@@ -73,6 +74,9 @@ struct InlineFrame {
 }
 
 pub fn parse_preview(markdown: &str) -> MarkdownDocument {
+    let wiki_links = crate::knowledge::parse_wiki_links(markdown);
+    let mut wiki_next = 0usize;
+    let mut pending_text = String::new();
     let parser = Parser::new_ext(markdown, Options::ENABLE_TASKLISTS);
     let mut blocks = Vec::new();
     let mut block: Option<BlockBuilder> = None;
@@ -82,6 +86,17 @@ pub fn parse_preview(markdown: &str) -> MarkdownDocument {
     let mut frames: Vec<InlineFrame> = Vec::new();
 
     for event in parser {
+        if !matches!(event, Event::Text(_)) && !pending_text.is_empty() {
+            let text = std::mem::take(&mut pending_text);
+            push_text_with_wiki(
+                &mut block,
+                &mut frames,
+                text,
+                markdown,
+                &wiki_links,
+                &mut wiki_next,
+            );
+        }
         match event {
             Event::Start(tag) => match tag {
                 Tag::Paragraph => {
@@ -198,7 +213,7 @@ pub fn parse_preview(markdown: &str) -> MarkdownDocument {
                 if let Some((_, text)) = &mut code {
                     text.push_str(&value);
                 } else {
-                    push_inline(&mut block, &mut frames, Inline::Text(value.into_string()));
+                    pending_text.push_str(&value);
                 }
             }
             Event::Code(value) => {
@@ -229,6 +244,17 @@ pub fn parse_preview(markdown: &str) -> MarkdownDocument {
                 push_inline(&mut block, &mut frames, Inline::Text(value.into_string()));
             }
         }
+    }
+    if !pending_text.is_empty() {
+        let text = std::mem::take(&mut pending_text);
+        push_text_with_wiki(
+            &mut block,
+            &mut frames,
+            text,
+            markdown,
+            &wiki_links,
+            &mut wiki_next,
+        );
     }
     while !frames.is_empty() {
         finish_inline(&mut block, &mut frames);
@@ -381,7 +407,48 @@ fn inline_plain_text(inlines: &[Inline]) -> String {
                 output.push_str(&inline_plain_text(children));
             }
             Inline::Link { label, .. } => output.push_str(&inline_plain_text(label)),
+            Inline::WikiLink(link) => output.push_str(&link.display_text),
         }
     }
     output
+}
+
+fn push_text_with_wiki(
+    block: &mut Option<BlockBuilder>,
+    frames: &mut Vec<InlineFrame>,
+    text: String,
+    source: &str,
+    links: &[crate::knowledge::WikiLink],
+    next: &mut usize,
+) {
+    let mut rest = text.as_str();
+    loop {
+        if *next >= links.len() {
+            if !rest.is_empty() {
+                push_inline(block, frames, Inline::Text(rest.to_string()));
+            }
+            return;
+        }
+        let link = &links[*next];
+        let needle = &source[link.range.clone()];
+        match rest.find(needle) {
+            Some(pos) => {
+                if pos > 0 {
+                    push_inline(block, frames, Inline::Text(rest[..pos].to_string()));
+                }
+                push_inline(block, frames, Inline::WikiLink(link.clone()));
+                *next += 1;
+                rest = &rest[pos + needle.len()..];
+                if rest.is_empty() {
+                    return;
+                }
+            }
+            None => {
+                if !rest.is_empty() {
+                    push_inline(block, frames, Inline::Text(rest.to_string()));
+                }
+                return;
+            }
+        }
+    }
 }

@@ -11,6 +11,7 @@ fn inline_text(inlines: &[Inline]) -> String {
                 text.push_str(&inline_text(children))
             }
             Inline::Link { label, .. } => text.push_str(&inline_text(label)),
+            Inline::WikiLink(link) => text.push_str(&link.display_text),
         }
     }
     text
@@ -66,4 +67,22 @@ fn parses_nested_formatting_code_quotes_lists_and_read_only_tasks() {
     assert_eq!(list[0].checked, Some(true));
     assert_eq!(inline_text(&list[0].content), "shipped");
     assert_eq!(list[1].checked, None);
+}
+
+#[test]
+fn wiki_links_become_typed_inlines_outside_code() {
+    let document = parse_preview(
+        "See [[Field Notes|my notes]] and `[[Code]]`\n\n```\n[[Fenced]]\n```\n\n# Head [[Field Notes]]",
+    );
+    let MarkdownBlock::Paragraph(inlines) = &document.blocks[0] else {
+        panic!("expected paragraph");
+    };
+    assert!(matches!(&inlines[1], Inline::WikiLink(link) if link.display_text == "my notes"));
+    assert!(inline_text(inlines).contains("[[Code]]"));
+    assert!(matches!(
+        &document.blocks[2],
+        MarkdownBlock::Heading { level: 1, .. }
+    ));
+    let excerpt = crane_domain::excerpt_from("See [[Field Notes|my notes]]", 120);
+    assert!(excerpt.contains("my notes") && !excerpt.contains("[["));
 }

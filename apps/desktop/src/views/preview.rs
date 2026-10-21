@@ -114,6 +114,9 @@ fn render_inlines(
             Inline::Text(text) | Inline::ImageAlt(text) => {
                 ui.label(styled_text(text, style));
             }
+            Inline::WikiLink(link) => {
+                ui.label(styled_text(&link.display_text, style));
+            }
             Inline::Code(text) => {
                 ui.monospace(text);
             }
@@ -177,6 +180,7 @@ fn inline_text(inlines: &[Inline]) -> String {
                 text.push_str(&inline_text(children));
             }
             Inline::Link { label, .. } => text.push_str(&inline_text(label)),
+            Inline::WikiLink(link) => text.push_str(&link.display_text),
         }
     }
     text
