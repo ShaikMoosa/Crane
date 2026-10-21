@@ -27,14 +27,17 @@ impl FakeRepository {
         }
     }
 
+    #[allow(dead_code)]
     pub fn disk_bytes(&self) -> Vec<u8> {
         self.state.lock().unwrap().disk_bytes.clone()
     }
 
+    #[allow(dead_code)]
     pub fn commit_count(&self) -> usize {
         self.state.lock().unwrap().commits
     }
 
+    #[allow(dead_code)]
     pub fn fail_next_commit(&self) {
         self.state.lock().unwrap().fail_next = true;
     }

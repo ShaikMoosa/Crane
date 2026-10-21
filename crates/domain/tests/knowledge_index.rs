@@ -86,7 +86,7 @@ fn backlinks_track_renames_and_visibility() {
     let mut trashed = note("c", "Source", "Link to [[Target]] here please");
     trashed.trashed = true;
     index.update_visibility(&trashed);
-    assert_eq!(index.visibility("c").unwrap().trashed, true);
+    assert!(index.visibility("c").unwrap().trashed);
     assert_eq!(index.facts("c").unwrap().links.len(), 1);
 }
 

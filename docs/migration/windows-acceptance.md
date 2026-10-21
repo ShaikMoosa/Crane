@@ -77,3 +77,86 @@ Still open (not claimed by this cycle): legacy GUI launch against an isolated pr
 Native spellcheck is not established in the egui editor. On 2026-10-20 the user approved deferring native spellcheck to a separately designed future feature so the staged migration can continue. Crane does not claim spellcheck parity in this migration.
 
 The Codex computer-control surface used for this implementation does not enumerate the native eframe window, so these physical checks remain open. A successful build, AccessKit test, or wgpu launch is not recorded as a manual pass.
+## 2026-10-22 — Crane 0.3.0 connected knowledge release (agent validation)
+
+Host: Windows 11 Pro 10.0.26200, 96 DPI (100% scale), en-IN keyboard layout. NSIS
+3.13 installed via winget for this cycle (`C:/Program Files (x86)/NSIS/makensis.exe`).
+The repo default ``target/`` directory holds a poisoned incremental cache (deterministic
+rustc ICE, live handles from another session), so every build below ran with
+``CARGO_TARGET_DIR=C:/Users/Admin/AppData/Local/Temp/crane-target-fresh``; the
+release ``crane.exe`` was copied into ``target/release/`` as the unchanged NSIS input
+(copy only, no clean). All app launches below used ``--preview-data-dir`` roots under
+``artifacts/test-data/`` (git-ignored); the production library was never opened.
+
+Build (scripts/build-windows.ps1 steps, fresh target dir):
+
+- ``cargo build --release --locked -p crane-desktop`` exit 0; ``crane.exe``
+  14,969,344 bytes, SHA-256
+  ``AB715D10D9D5F46AB23C2FA8B11E6D7CD86B885CECE27712B789CF8EAF8366E8``.
+- ``smoke-windows.ps1`` passed for the staged binary (exit 0).
+- ``makensis packaging/windows/crane.nsi`` exit 0; ``Crane_0.3.0_x64-setup.exe``
+  4,330,845 bytes, SHA-256
+  ``AE031FB028BB311CEE43B7004CEA5443471A305E7C7B2841EB8101531D6390B4``.
+- ``smoke-windows.ps1`` passed for the installer (exit 0); ``build-provenance.txt``
+  records crane 0.3.0, rustc/cargo 1.99.1, and both hashes.
+- ``cargo metadata --locked`` pins ``crane-desktop 0.3.0``; ``main.rs`` stamps backups
+  with ``env!("CARGO_PKG_VERSION")``, so new backups report app_version 0.3.0 while
+  ``BACKUP_VERSION``/``SCHEMA_VERSION`` stay 1 (pinned by
+  ``crates/application/tests/knowledge_perf.rs``).
+- Cargo gate on the release tree: ``cargo fmt --check``, ``cargo test --workspace
+  --all-features --locked``, workspace clippy ``-D warnings``, workspace
+  ``--all-targets`` build, desktop ``--offline`` build, ``check-layers``,
+  ``check-native-release``, and ``smoke-windows -SelfTest`` all exit 0
+  (workspace clippy needed two Task 15 test-only fixes: per-target ``dead_code``
+  allows in application test support, one ``assert!(bool)`` in the domain index
+  test).
+
+Installer cycle (silent ``/S`` throughout):
+
+- Legacy ``artifacts/legacy/Crane_0.1.0_x64-setup.exe`` re-verified before use:
+  2,113,680 bytes, SHA-256 ``D4192F...6956A39`` (matches the 2026-10-21 record).
+- Installed 0.1.0, then 0.3.0: exactly one registration (``app.crane.desktop``,
+  DisplayVersion 0.3.0), legacy key and ``%LOCALAPPDATA%/Crane`` removed, installed
+  ``crane.exe`` hash identical to the staged build.
+- Uninstalled 0.3.0: zero registrations, program dir and desktop shortcut removed,
+  production ``notes.json`` byte-identical (SHA-256 ``64FDA31B...86859BC7``,
+  unchanged since 2026-10-21).
+- Rollback: reinstalled 0.1.0 (registration ``Crane`` 0.1.0, program present),
+  uninstalled it again; machine left with zero Crane registrations and the
+  production library untouched.
+
+Library and byte rows (installed 0.3.0 binary, isolated preview roots):
+
+- Offline launch/close/reopen: ``notes.json`` SHA-256 stable across four launches.
+- 0.2 fixture (``fixtures/compat/v1/extended.json`` copy + marker): opens cleanly,
+  schema stays 1, note ``legacy-active`` preserved, 10 s healthy run.
+- Unicode (CJK titles/bodies, combining marks, RTL, ZWJ emoji): byte-identical
+  across two launches; decoded titles/bodies verified after reopen.
+- ~2 MB single body (1,966,000 bytes, very long first line): byte-identical across
+  two launches, no early exit.
+- Preview-root guard re-verified: a non-empty folder without
+  ``.crane-preview-fixture`` exits 1 with the refusal message (this was the cause of
+  one observed early exit during validation; operator error, not an app defect).
+- One first-launch instance exited within 12 s with no Application-log crash entry;
+  ten subsequent launches across six data roots (8–30 s each) were healthy. Cause
+  not reproduced; no action taken.
+
+Large-library evidence (``knowledge_perf`` suite, deterministic 5,000-note store):
+
+- Open + full index build: ~304 ms; facts for all 5,000 notes.
+- 200 Quick Open queries: ~42 s total (~210 ms each over 5,000 notes), every result
+  bounded at 50 hits. No wall-clock assertion by design; 210 ms/keystroke at this
+  scale is usable but is the known next optimization target.
+- SaveNote + single-note reindex: ~64 ms; exactly one commit; only the saved note''s
+  facts replaced (neighbour facts and backlink counts verified unchanged).
+
+Still requiring a human operator on physical Windows (unchanged harness limits):
+
+- DPI 100/150/200 visual layouts and long-line horizontal scrolling feel.
+- IME input feel (Latin/CJK/combining/emoji composition); byte persistence above is
+  proven, live composition is not.
+- Clipboard both directions, multi-step undo/redo feel, Narrator traversal of the
+  sidebar/inspector/chooser/overlay, and the full keyboard-only flow (harness covers
+  single-step undo and Tab order as partial evidence).
+- Fresh-socket offline run is trivially satisfied (Crane opens no sockets; the native
+  release check forbids the web stack).

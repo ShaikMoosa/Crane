@@ -5,7 +5,7 @@ Unicode true
 SetCompressor /SOLID lzma
 
 !define PRODUCT_NAME "Crane"
-!define PRODUCT_VERSION "0.2.0"
+!define PRODUCT_VERSION "0.3.0"
 !define PRODUCT_ID "app.crane.desktop"
 !define EXE_NAME "crane.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
