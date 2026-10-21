@@ -112,6 +112,23 @@ impl Library {
         })
     }
 
+    pub fn query(&mut self, query: crate::knowledge::Query) -> crate::knowledge::QueryResponse {
+        self.ensure_index_consistent();
+        crate::knowledge::answer_query(
+            &self.store,
+            &self.index,
+            self.environment.local_day_bounds_millis(),
+            self.revision,
+            query,
+        )
+    }
+
+    fn ensure_index_consistent(&mut self) {
+        if self.index.note_count() != self.store.notes.len() {
+            self.index = KnowledgeIndex::build(&self.store);
+        }
+    }
+
     pub fn knowledge_index(&self) -> &KnowledgeIndex {
         &self.index
     }

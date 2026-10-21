@@ -96,3 +96,145 @@ fn failed_commit_leaves_index_unchanged_and_empty_title_is_rejected() {
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::Validation);
 }
+
+use crane_application::knowledge::{CollectionView, LinkState, Query, QueryData, ResolutionView};
+
+fn query_ids(library: &mut Library, collection: CollectionView) -> Vec<String> {
+    let response = library.query(Query::NotesForCollection {
+        collection,
+        tag_path: None,
+        query: String::new(),
+    });
+    let QueryData::NoteIds(ids) = response.data else {
+        panic!("expected NoteIds");
+    };
+    ids
+}
+
+#[test]
+fn quick_open_ranks_and_scopes() {
+    let (mut library, _repo) = open(vec![
+        note("exact", "Alpha", "body", 10),
+        note("prefix", "Alphabet", "body", 90),
+        note("taggy", "Other", "tagged #alpha topic", 80),
+        note("arch", "Alpha archive", "body", 70),
+    ]);
+    library
+        .execute(Command::SetNoteState {
+            id: "arch".into(),
+            state: NoteState::Archived,
+            value: true,
+        })
+        .unwrap();
+    let response = library.query(Query::QuickOpen {
+        query: "alpha".into(),
+        include_archived: false,
+    });
+    let QueryData::QuickOpen(hits) = response.data else {
+        panic!("expected hits");
+    };
+    let ids: Vec<_> = hits.iter().map(|h| h.note_id.as_str()).collect();
+    assert_eq!(ids, ["exact", "prefix", "taggy"]);
+    let response = library.query(Query::QuickOpen {
+        query: "alpha".into(),
+        include_archived: true,
+    });
+    let QueryData::QuickOpen(hits) = response.data else {
+        panic!("expected hits");
+    };
+    assert_eq!(hits.len(), 4);
+}
+
+#[test]
+fn resolution_and_knowledge_views_are_explicit() {
+    let (mut library, _repo) = open(vec![
+        note("a", "Field Notes", "# Intro\n\nBody", 1),
+        note("dup", "field notes", "Copy", 2),
+        note(
+            "src",
+            "Source",
+            "[[Field Notes]] [[Field Notes#Intro]] [[Ghost]]",
+            3,
+        ),
+    ]);
+    let source = library.knowledge_index().facts("src").unwrap().clone();
+    let response = library.query(Query::ResolveWikiLink {
+        link: source.links[0].clone(),
+    });
+    assert!(matches!(
+        response.data,
+        QueryData::Resolution(ResolutionView::Ambiguous { .. })
+    ));
+    let response = library.query(Query::KnowledgeFor {
+        note_id: "src".into(),
+    });
+    let QueryData::Knowledge(view) = response.data else {
+        panic!("expected knowledge");
+    };
+    assert!(matches!(view.outgoing[0].state, LinkState::Ambiguous));
+    assert!(matches!(view.outgoing[2].state, LinkState::Unresolved));
+    assert!(view.backlinks.is_empty());
+}
+
+#[test]
+fn derived_collections_and_tag_tree() {
+    let (mut library, _repo) = open(vec![
+        note("today", "Today note", "fresh #project/crane/ui", 500),
+        note("todo", "Todo note", "- [ ] open task", 400),
+        note("plain", "Plain", "no tags here", 300),
+        note("old", "Old", "stale #project/web", 10),
+    ]);
+    assert_eq!(query_ids(&mut library, CollectionView::Today).len(), 4);
+    assert_eq!(query_ids(&mut library, CollectionView::Todos), ["todo"]);
+    assert_eq!(
+        query_ids(&mut library, CollectionView::Untagged),
+        ["todo", "plain"]
+    );
+    let response = library.query(Query::NotesForCollection {
+        collection: CollectionView::Notes,
+        tag_path: Some("project".into()),
+        query: String::new(),
+    });
+    let QueryData::NoteIds(ids) = response.data else {
+        panic!("expected ids");
+    };
+    assert_eq!(ids, ["today", "old"]);
+    let response = library.query(Query::TagTree {
+        include_archived: false,
+    });
+    let QueryData::TagTree(tree) = response.data else {
+        panic!("expected tree");
+    };
+    assert_eq!(tree[0].path, "project");
+    assert_eq!(tree[0].note_count, 2);
+}
+
+#[test]
+fn completion_switches_to_headings() {
+    let (mut library, _repo) = open(vec![
+        note("a", "Field Notes", "# Intro\n\n## On the desk\n", 1),
+        note("b", "Field Trip", "Body", 2),
+    ]);
+    let response = library.query(Query::CompleteWikiLink {
+        fragment: "Fie".into(),
+    });
+    let QueryData::Completion(candidates) = response.data else {
+        panic!("expected completion");
+    };
+    assert_eq!(candidates.len(), 2);
+    let response = library.query(Query::CompleteWikiLink {
+        fragment: "Field Notes#On".into(),
+    });
+    let QueryData::Completion(candidates) = response.data else {
+        panic!("expected completion");
+    };
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].insert_text(), "On the desk");
+    let response = library.query(Query::CompleteWikiLink {
+        fragment: "Field Notes|alias".into(),
+    });
+    let QueryData::Completion(candidates) = response.data else {
+        panic!("expected completion");
+    };
+    assert!(candidates.is_empty());
+}
