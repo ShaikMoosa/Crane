@@ -7,7 +7,7 @@ use crane_application::{
 use crane_desktop::draft::Draft;
 use crane_desktop::transfers::{TransferController, TransferState};
 use crane_desktop::views::restore::{self, RestoreAction};
-use crane_desktop::worker::WorkerResult;
+use crane_desktop::worker::{WorkerOutcome, WorkerResult};
 use crane_domain::{make_backup, serialize_backup, BackupInspection, NamedBytes, Note, Store};
 use eframe::egui::{accesskit::Role, Key};
 use egui_kittest::{
@@ -43,13 +43,13 @@ fn inspected_controller(token: &str) -> TransferController {
     let request = controller.take_ready_request(Some(&clean)).unwrap();
     controller.complete(WorkerResult {
         request_id: request.request_id,
-        result: Ok(CommandResult {
+        outcome: WorkerOutcome::Command(Ok(CommandResult {
             revision: 0,
             data: CommandData::Inspection {
                 token: token.into(),
                 inspection: inspection(),
             },
-        }),
+        })),
     });
     controller
 }
@@ -92,7 +92,7 @@ fn inspection_shows_counts_replacement_copy_and_focuses_cancel_without_writing()
 
     for _ in 0..4 {
         harness.key_press(Key::Tab);
-        harness.run();
+        harness.run_steps(8);
         assert!(
             harness.get_by_label("Cancel restore").is_focused()
                 || harness.get_by_label("Replace library").is_focused(),
@@ -128,8 +128,8 @@ fn cancel_and_confirm_use_the_exact_token_once() {
         .unwrap();
     let cancel = cancelled.take_ready_request(Some(&clean)).unwrap();
     assert!(matches!(
-        cancel.command,
-        Command::CancelRestore { ref token } if token == "cancel-token"
+        cancel.command_ref(),
+        Some(Command::CancelRestore { token }) if token == "cancel-token"
     ));
     assert!(!cancelled.can_cancel_restore());
 
@@ -144,8 +144,8 @@ fn cancel_and_confirm_use_the_exact_token_once() {
         .unwrap();
     let restore = confirmed.take_ready_request(Some(&clean)).unwrap();
     assert!(matches!(
-        restore.command,
-        Command::RestoreBackup { ref token } if token == "confirm-token"
+        restore.command_ref(),
+        Some(Command::RestoreBackup { token }) if token == "confirm-token"
     ));
     assert!(confirmed.take_ready_request(Some(&clean)).is_none());
     let error = confirmed
@@ -217,10 +217,10 @@ fn restore_failure_exposes_the_phase_and_keeps_confirmation_consumed() {
     let request = controller.take_ready_request(Some(&clean)).unwrap();
     controller.complete(WorkerResult {
         request_id: request.request_id,
-        result: Err(AppError::new(
+        outcome: WorkerOutcome::Command(Err(AppError::new(
             ErrorCode::Io,
             "Could not write the pre-restore safety backup.",
-        )),
+        ))),
     });
 
     assert_eq!(controller.state(), &TransferState::Idle);

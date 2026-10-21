@@ -1,5 +1,5 @@
 use crate::draft::Draft;
-use crate::worker::{WorkerRequest, WorkerResult};
+use crate::worker::{WorkerOutcome, WorkerRequest, WorkerResult};
 use crane_application::{AppError, Command, CommandData, ErrorCode};
 use crane_domain::{BackupInspection, Store};
 
@@ -135,10 +135,7 @@ impl TransferController {
         self.running_request_id = Some(request_id);
         self.running_command = Some(command.clone());
         self.state = TransferState::Running;
-        Some(WorkerRequest {
-            request_id,
-            command,
-        })
+        Some(WorkerRequest::command(request_id, command))
     }
 
     pub fn return_unsent(&mut self, request: WorkerRequest, error: AppError) {
@@ -146,7 +143,7 @@ impl TransferController {
             self.running_request_id = None;
             self.running_command = None;
             if error.code == ErrorCode::QueueFull {
-                self.pending_command = Some(request.command);
+                self.pending_command = request.command_ref().cloned();
                 self.state = TransferState::Flushing;
             } else {
                 self.pending_command = None;
@@ -168,7 +165,10 @@ impl TransferController {
         }
         let command = self.running_command.take();
         self.running_request_id = None;
-        match result.result {
+        let WorkerOutcome::Command(result) = result.outcome else {
+            return TransferEffect::None;
+        };
+        match result {
             Ok(command_result) => self.complete_success(command, command_result.data),
             Err(error) => {
                 self.state = TransferState::Idle;

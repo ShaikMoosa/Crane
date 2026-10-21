@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
-        harness.run();
+        harness.run_steps(8);
         if !harness.state().has_pending_work() {
             return;
         }
@@ -30,16 +30,16 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness
         .get_by_label("Search notes")
         .set_text_value_accesskit("Beta");
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("Beta reading");
     assert!(harness.query_by_label("Alpha plan").is_none());
 
     harness
         .get_by_label("Search notes")
         .set_text_value_accesskit("");
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("#work/process").click();
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("Alpha plan");
     assert!(harness.query_by_label("Beta reading").is_none());
 
@@ -48,7 +48,7 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness.get_by_label("Pin note").click();
     settle(&mut harness);
     harness.get_by_label("Pinned").click();
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("Alpha plan");
     harness.get_by_label("Alpha plan").click();
     harness.run();
@@ -56,7 +56,7 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness.get_by_label("Archive note").click();
     settle(&mut harness);
     harness.get_by_label("Archive").click();
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("Alpha plan");
     harness.get_by_label("Alpha plan").click();
     harness.run();
@@ -64,7 +64,7 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness.get_by_label("Move to Trash").click();
     settle(&mut harness);
     harness.get_by_label("Trash").click();
-    harness.run();
+    settle(&mut harness);
     harness.get_by_label("Alpha plan");
     harness.get_by_label("Alpha plan").click();
     harness.run();
@@ -96,17 +96,24 @@ fn create_note_focuses_title_and_layout_breakpoints_are_exact() {
 
 #[test]
 fn query_cache_only_recomputes_for_relevant_changes() {
-    let (mut app, _) = app(vec![note("alpha", "Alpha", "#work/process", 1)]);
-    let first = app.visible_note_ids().to_vec();
-    let initial = app.cache_stats().query_recomputes;
-    assert_eq!(app.visible_note_ids(), first);
-    assert_eq!(app.cache_stats().query_recomputes, initial);
+    let (app, _) = app(vec![note("alpha", "Alpha", "#work/process", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    let initial = harness.state().cache_stats().query_recomputes;
+    assert!(initial >= 1);
+    harness.run();
+    assert_eq!(harness.state().cache_stats().query_recomputes, initial);
 
-    app.set_query("Alpha");
-    app.visible_note_ids();
-    assert_eq!(app.cache_stats().query_recomputes, initial + 1);
-    app.visible_note_ids();
-    assert_eq!(app.cache_stats().query_recomputes, initial + 1);
+    harness
+        .get_by_label("Search notes")
+        .set_text_value_accesskit("Alpha");
+    settle(&mut harness);
+    harness.get_by_label("Alpha");
+    assert_eq!(harness.state().cache_stats().query_recomputes, initial + 1);
+    harness.run();
+    assert_eq!(harness.state().cache_stats().query_recomputes, initial + 1);
 }
 
 #[test]
@@ -183,6 +190,32 @@ fn keyboard_search_and_escape_navigation_are_available() {
     narrow.key_press(eframe::egui::Key::Escape);
     narrow.run();
     narrow.get_by_label("Open library");
+}
+
+#[test]
+fn sidebar_shows_derived_collections_and_tag_hierarchy() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "Work #project/crane/ui", 30),
+        note("b", "Beta", "- [ ] open task", 20),
+        note("c", "Gamma", "plain text", 10),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Today");
+    harness.get_by_label("Todos");
+    harness.get_by_label("Untagged");
+    harness.get_by_label("#project");
+    harness.get_by_label("#project/crane");
+    harness.get_by_label("Todos").click();
+    settle(&mut harness);
+    harness.get_by_label("Beta");
+    harness.get_by_label("Notes").click();
+    settle(&mut harness);
+    harness.get_by_label("#project").click();
+    settle(&mut harness);
+    harness.get_by_label("Alpha");
 }
 
 #[test]

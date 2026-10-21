@@ -8,8 +8,9 @@ pub fn show(
     selected_id: Option<&str>,
     query: &mut String,
     request_search_focus: bool,
+    heading: &str,
 ) -> Option<String> {
-    ui.heading("Notes");
+    ui.heading(heading);
     let search = ui
         .add(egui::TextEdit::singleline(query).hint_text("Search notes"))
         .accessible_name("Search notes");

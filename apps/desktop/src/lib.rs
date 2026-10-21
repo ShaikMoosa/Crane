@@ -4,6 +4,7 @@ pub mod app;
 pub mod draft;
 pub mod icons;
 pub mod settings;
+pub mod sidebar;
 pub mod startup;
 pub mod theme;
 pub mod transfers;

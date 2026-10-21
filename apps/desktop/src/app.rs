@@ -1,16 +1,17 @@
 use crate::draft::{Draft, DraftCoordinator};
 use crate::settings::SettingsController;
+use crate::sidebar::{SidebarIntent, SidebarState, SidebarView};
 use crate::theme;
 use crate::transfers::{TransferController, TransferEffect, TransferState};
 use crate::view_state::{layout_mode, LayoutMode, ViewState};
 use crate::views::{editor, library, note_list, restore};
-use crate::worker::{spawn_worker, WorkerHandle, WorkerRequest, WorkerResult};
+use crate::worker::{spawn_worker, WorkerHandle, WorkerOutcome, WorkerRequest, WorkerResult};
+use crane_application::knowledge::{CollectionView, Query, QueryData, SidebarCounts};
 use crane_application::{
     AppError, Command, CommandData, ErrorCode, Library, LibrarySnapshot, NoteState,
 };
-use crane_domain::{
-    parse_preview, query_note_ids, Collection, MarkdownDocument, Note, NoteFilter, Store,
-};
+use crane_domain::knowledge::TagNode;
+use crane_domain::{parse_preview, MarkdownDocument, Note, Store};
 use crane_storage::{NativeSettings, ThemeChoice};
 use eframe::egui;
 use std::collections::HashMap;
@@ -25,10 +26,18 @@ pub struct CacheStats {
     pub preview_recomputes: u64,
 }
 
+type ListKey = (u64, CollectionView, Option<String>, String);
+
 #[derive(Default)]
 struct QueryCache {
-    key: Option<(u64, NoteFilter)>,
+    key: Option<ListKey>,
     ids: Vec<String>,
+}
+
+enum PendingQuery {
+    NoteIds(ListKey),
+    TagTree,
+    Counts,
 }
 
 #[derive(Default)]
@@ -48,7 +57,7 @@ enum DeferredAction {
     Create,
     Select(String),
     ChangeFilter {
-        collection: Collection,
+        collection: CollectionView,
         tag: Option<String>,
     },
     SetState {
@@ -89,6 +98,12 @@ pub struct CraneApp {
     transfers: TransferController,
     data_menu_open: bool,
     request_restore_cancel_focus: bool,
+    pending_queries: HashMap<u64, PendingQuery>,
+    sidebar_state: SidebarState,
+    tag_tree: Vec<TagNode>,
+    tag_tree_revision: Option<u64>,
+    counts: SidebarCounts,
+    counts_revision: Option<u64>,
 }
 
 impl CraneApp {
@@ -135,14 +150,7 @@ impl CraneApp {
         settings_path: Option<PathBuf>,
         wake: Box<dyn Fn() + Send>,
     ) -> Self {
-        let initial_filter = NoteFilter {
-            collection: Collection::Notes,
-            tag: None,
-            query: String::new(),
-        };
-        let selected_id = query_note_ids(&snapshot.store, &initial_filter)
-            .into_iter()
-            .next();
+        let selected_id = first_active_note_id(&snapshot.store);
         let draft = selected_id.as_deref().and_then(|id| {
             snapshot
                 .store
@@ -183,6 +191,12 @@ impl CraneApp {
             transfers: TransferController::default(),
             data_menu_open: false,
             request_restore_cancel_focus: false,
+            pending_queries: HashMap::new(),
+            sidebar_state: SidebarState::default(),
+            tag_tree: Vec::new(),
+            tag_tree_revision: None,
+            counts: SidebarCounts::default(),
+            counts_revision: None,
         }
     }
 
@@ -221,6 +235,7 @@ impl CraneApp {
                 }
             }
         } else {
+            let pane_height = ui.available_height();
             ui.horizontal(|ui| {
                 let rail_width = if mode == LayoutMode::Wide {
                     theme::RAIL_WIDTH
@@ -228,7 +243,7 @@ impl CraneApp {
                     theme::COLLAPSED_RAIL_WIDTH
                 };
                 ui.allocate_ui_with_layout(
-                    egui::vec2(rail_width, ui.available_height()),
+                    egui::vec2(rail_width, pane_height),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
@@ -246,7 +261,7 @@ impl CraneApp {
                     theme::COLLAPSED_NOTE_LIST_WIDTH
                 };
                 ui.allocate_ui_with_layout(
-                    egui::vec2(list_width, ui.available_height()),
+                    egui::vec2(list_width, pane_height),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         theme::paint_pane(
@@ -275,13 +290,125 @@ impl CraneApp {
     }
 
     pub fn visible_note_ids(&mut self) -> &[String] {
-        let key = (self.store_revision, self.view.filter());
-        if self.query_cache.key.as_ref() != Some(&key) {
-            self.query_cache.ids = query_note_ids(&self.store, &key.1);
-            self.query_cache.key = Some(key);
-            self.cache_stats.query_recomputes = self.cache_stats.query_recomputes.saturating_add(1);
-        }
+        self.ensure_note_ids();
         &self.query_cache.ids
+    }
+
+    fn send_query(&mut self, query: Query, pending: PendingQuery) -> u64 {
+        let request_id = self.next_request_id;
+        self.next_request_id = self.next_request_id.saturating_add(1);
+        match self
+            .worker
+            .try_send(WorkerRequest::query(request_id, query))
+        {
+            Ok(()) => {
+                self.pending_queries.insert(request_id, pending);
+            }
+            Err(error) => self.view.status = Some(error.message),
+        }
+        request_id
+    }
+
+    fn ensure_sidebar_queries(&mut self) {
+        let has_tag = self
+            .pending_queries
+            .values()
+            .any(|q| matches!(q, PendingQuery::TagTree));
+        if self.tag_tree_revision != Some(self.store_revision) && !has_tag {
+            self.send_query(
+                Query::TagTree {
+                    include_archived: true,
+                },
+                PendingQuery::TagTree,
+            );
+        }
+        let has_counts = self
+            .pending_queries
+            .values()
+            .any(|q| matches!(q, PendingQuery::Counts));
+        if self.counts_revision != Some(self.store_revision) && !has_counts {
+            self.send_query(Query::CollectionCounts, PendingQuery::Counts);
+        }
+    }
+
+    fn ensure_note_ids(&mut self) {
+        let key: ListKey = (
+            self.store_revision,
+            self.view.collection,
+            self.view.tag.clone(),
+            self.view.query.clone(),
+        );
+        if self.query_cache.key.as_ref() == Some(&key) {
+            return;
+        }
+        let already = self
+            .pending_queries
+            .values()
+            .any(|q| matches!(q, PendingQuery::NoteIds(k) if *k == key));
+        if already {
+            return;
+        }
+        self.send_query(
+            Query::NotesForCollection {
+                collection: key.1,
+                tag_path: key.2.clone(),
+                query: key.3.clone(),
+            },
+            PendingQuery::NoteIds(key),
+        );
+    }
+
+    fn handle_query_response(
+        &mut self,
+        request_id: u64,
+        response: crane_application::knowledge::QueryResponse,
+    ) {
+        let Some(pending) = self.pending_queries.remove(&request_id) else {
+            return;
+        };
+        match (pending, response.data) {
+            (PendingQuery::NoteIds(key), QueryData::NoteIds(ids)) => {
+                let current: ListKey = (
+                    self.store_revision,
+                    self.view.collection,
+                    self.view.tag.clone(),
+                    self.view.query.clone(),
+                );
+                if key == current {
+                    self.query_cache.ids = ids;
+                    self.query_cache.key = Some(key);
+                    self.cache_stats.query_recomputes =
+                        self.cache_stats.query_recomputes.saturating_add(1);
+                    let selected_visible = self
+                        .view
+                        .selected_id
+                        .as_ref()
+                        .is_some_and(|id| self.query_cache.ids.contains(id));
+                    let draft_busy = self
+                        .draft
+                        .as_ref()
+                        .is_some_and(DraftCoordinator::has_pending_work);
+                    if !selected_visible
+                        && self.view.selected_id.is_some()
+                        && !draft_busy
+                        && self.pending_requests.is_empty()
+                    {
+                        self.view.selected_id = None;
+                        self.draft = None;
+                        self.preview_cache.key = None;
+                    }
+                }
+            }
+            (PendingQuery::TagTree, QueryData::TagTree(tree)) => {
+                self.tag_tree = tree;
+                self.tag_tree_revision = Some(response.store_revision);
+            }
+            (PendingQuery::Counts, QueryData::CollectionCounts(counts)) => {
+                self.counts = counts;
+                self.counts_revision = Some(response.store_revision);
+            }
+            _ => {}
+        }
     }
 
     pub fn cache_stats(&self) -> CacheStats {
@@ -315,6 +442,7 @@ impl CraneApp {
         !self.pending_requests.is_empty()
             || self.deferred_action.is_some()
             || self.transfers.has_pending_work()
+            || !self.pending_queries.is_empty()
             || self
                 .draft
                 .as_ref()
@@ -348,34 +476,72 @@ impl CraneApp {
     }
 
     fn show_library(&mut self, ui: &mut egui::Ui, collapsed: bool, request_data_focus: bool) {
-        let transfer_status = match self.transfers.state() {
-            TransferState::Flushing => self.transfers.status().or(Some("Saving before transfer…")),
-            TransferState::Running => Some("Transfer in progress…"),
-            _ => self.transfers.status(),
+        self.ensure_sidebar_queries();
+        let transfer_status: Option<String> = match self.transfers.state() {
+            TransferState::Flushing => self
+                .transfers
+                .status()
+                .map(str::to_owned)
+                .or_else(|| Some("Saving before transfer".to_string())),
+            TransferState::Running => Some("Transfer in progress".to_string()),
+            _ => self.transfers.status().map(str::to_owned),
         };
+        let footer_height = 128.0;
+        let mutations_enabled = self.transfers.can_mutate();
+        let content_size = egui::vec2(
+            ui.available_width(),
+            (ui.available_height() - footer_height).max(0.0),
+        );
+        let mut intent = None;
+        ui.allocate_ui_with_layout(
+            content_size,
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                intent = crate::sidebar::show(
+                    ui,
+                    &mut self.sidebar_state,
+                    SidebarView {
+                        counts: &self.counts,
+                        tag_tree: &self.tag_tree,
+                        active: self.view.collection,
+                        active_tag: self.view.tag.as_deref(),
+                        collapsed,
+                        mutations_enabled,
+                    },
+                );
+            },
+        );
+        match intent {
+            Some(SidebarIntent::Create) => {
+                self.request_after_save(DeferredAction::Create);
+            }
+            Some(SidebarIntent::Collection(collection)) => {
+                self.request_after_save(DeferredAction::ChangeFilter {
+                    collection,
+                    tag: None,
+                });
+            }
+            Some(SidebarIntent::Tag(tag)) => {
+                self.request_after_save(DeferredAction::ChangeFilter {
+                    collection: CollectionView::Notes,
+                    tag,
+                });
+            }
+            None => {}
+        }
+        ui.separator();
         let actions = library::show(
             ui,
             library::LibraryView {
-                store: &self.store,
-                active_collection: self.view.collection,
-                active_tag: self.view.tag.as_deref(),
                 theme: self.settings.value().theme,
                 reduced_motion: self.settings.value().reduced_motion,
                 collapsed,
-                mutations_enabled: self.transfers.can_mutate(),
+                mutations_enabled,
                 data_menu_open: &mut self.data_menu_open,
                 request_data_focus,
-                transfer_status,
+                transfer_status: transfer_status.as_deref(),
             },
         );
-        if actions.create {
-            self.request_after_save(DeferredAction::Create);
-        } else if let Some(collection) = actions.collection {
-            self.request_after_save(DeferredAction::ChangeFilter {
-                collection,
-                tag: actions.tag.unwrap_or(None),
-            });
-        }
         if actions.toggle_theme {
             let mut candidate = self.settings.value().clone();
             candidate.theme = match candidate.theme {
@@ -401,6 +567,7 @@ impl CraneApp {
     }
 
     fn show_note_list(&mut self, ui: &mut egui::Ui) {
+        self.ensure_note_ids();
         let visible = self.visible_note_ids().to_vec();
         let previous_query = self.view.query.clone();
         let selected = note_list::show(
@@ -410,6 +577,11 @@ impl CraneApp {
             self.view.selected_id.as_deref(),
             &mut self.view.query,
             std::mem::take(&mut self.request_search_focus),
+            &format!(
+                "{} ({})",
+                collection_label(self.view.collection),
+                visible.len()
+            ),
         );
         if self.view.query != previous_query {
             self.query_cache.key = None;
@@ -727,10 +899,10 @@ impl CraneApp {
     fn dispatch(&mut self, command: Command, pending: PendingCommand) {
         let request_id = self.next_request_id;
         self.next_request_id = self.next_request_id.saturating_add(1);
-        match self.worker.try_send(WorkerRequest {
-            request_id,
-            command,
-        }) {
+        match self
+            .worker
+            .try_send(WorkerRequest::command(request_id, command))
+        {
             Ok(()) => {
                 self.pending_requests.insert(request_id, pending);
             }
@@ -740,6 +912,12 @@ impl CraneApp {
 
     fn poll_worker(&mut self) {
         while let Some(result) = self.worker.try_recv() {
+            if self.pending_queries.contains_key(&result.request_id) {
+                if let WorkerOutcome::Query(response) = result.outcome {
+                    self.handle_query_response(result.request_id, response);
+                }
+                continue;
+            }
             if self.transfers.owns_request(result.request_id) {
                 let was_inspection = matches!(self.transfers.state(), TransferState::Running);
                 let effect = self.transfers.complete(result);
@@ -781,9 +959,8 @@ impl CraneApp {
             .as_deref()
             .and_then(|id| self.store.notes.iter().find(|note| note.id == id))
             .or_else(|| {
-                query_note_ids(&self.store, &self.view.filter())
-                    .first()
-                    .and_then(|id| self.store.notes.iter().find(|note| note.id == *id))
+                first_active_note_id(&self.store)
+                    .and_then(|id| self.store.notes.iter().find(|note| note.id == id))
             });
         self.view.selected_id = selected.map(|note| note.id.clone());
         self.draft = selected.map(|note| DraftCoordinator::new(draft_from_note(note)));
@@ -792,7 +969,7 @@ impl CraneApp {
     fn accept_worker_result(&mut self, result: WorkerResult) {
         let pending = self.pending_requests.remove(&result.request_id);
         if pending.is_none() {
-            if let Ok(command_result) = &result.result {
+            if let WorkerOutcome::Command(Ok(command_result)) = &result.outcome {
                 if let CommandData::Saved { note, .. } = &command_result.data {
                     self.replace_note(note.clone(), command_result.revision);
                 }
@@ -811,7 +988,10 @@ impl CraneApp {
         }
 
         let pending = pending.expect("generic result was identified above");
-        match result.result {
+        let WorkerOutcome::Command(result) = result.outcome else {
+            return;
+        };
+        match result {
             Ok(command_result) => {
                 self.store_revision = command_result.revision;
                 match command_result.data {
@@ -819,7 +999,7 @@ impl CraneApp {
                         self.store.notes.push(note.clone());
                         self.draft = Some(DraftCoordinator::new(draft_from_note(&note)));
                         self.view.selected_id = Some(note.id);
-                        self.view.collection = crane_domain::Collection::Notes;
+                        self.view.collection = CollectionView::Notes;
                         self.view.tag = None;
                         self.view.query.clear();
                         self.request_title_focus = true;
@@ -852,7 +1032,7 @@ impl CraneApp {
     }
 
     fn reconcile_selected_visibility(&mut self) {
-        let visible = query_note_ids(&self.store, &self.view.filter());
+        let visible = self.query_cache.ids.clone();
         if self
             .view
             .selected_id
@@ -976,6 +1156,32 @@ impl eframe::App for CraneApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ui, |ui| self.show(ui));
     }
+}
+
+fn collection_label(collection: CollectionView) -> &'static str {
+    match collection {
+        CollectionView::Notes => "Notes",
+        CollectionView::Pinned => "Pinned",
+        CollectionView::Today => "Today",
+        CollectionView::Todos => "Todos",
+        CollectionView::Untagged => "Untagged",
+        CollectionView::Archive => "Archive",
+        CollectionView::Trash => "Trash",
+    }
+}
+
+fn first_active_note_id(store: &Store) -> Option<String> {
+    let mut notes: Vec<&Note> = store
+        .notes
+        .iter()
+        .filter(|note| !note.archived && !note.trashed)
+        .collect();
+    notes.sort_by(|a, b| {
+        b.pinned
+            .cmp(&a.pinned)
+            .then_with(|| b.updated_at.cmp(&a.updated_at))
+    });
+    notes.first().map(|note| note.id.clone())
 }
 
 fn draft_from_note(note: &Note) -> Draft {

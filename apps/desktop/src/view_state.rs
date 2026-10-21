@@ -1,4 +1,4 @@
-use crane_domain::{Collection, NoteFilter};
+use crane_application::knowledge::CollectionView;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayoutMode {
@@ -19,33 +19,25 @@ pub fn layout_mode(width_points: f32) -> LayoutMode {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ViewState {
-    pub collection: Collection,
+    pub collection: CollectionView,
     pub tag: Option<String>,
     pub query: String,
     pub selected_id: Option<String>,
     pub preview: bool,
     pub status: Option<String>,
+    pub focus_mode: bool,
 }
 
 impl Default for ViewState {
     fn default() -> Self {
         Self {
-            collection: Collection::Notes,
+            collection: CollectionView::Notes,
             tag: None,
             query: String::new(),
             selected_id: None,
             preview: false,
             status: None,
-        }
-    }
-}
-
-impl ViewState {
-    pub fn filter(&self) -> NoteFilter {
-        NoteFilter {
-            collection: self.collection,
-            tag: self.tag.clone(),
-            query: self.query.clone(),
+            focus_mode: false,
         }
     }
 }

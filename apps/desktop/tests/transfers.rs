@@ -6,7 +6,7 @@ use crane_application::{
 };
 use crane_desktop::draft::Draft;
 use crane_desktop::transfers::{TransferController, TransferEffect, TransferState};
-use crane_desktop::worker::WorkerResult;
+use crane_desktop::worker::{WorkerOutcome, WorkerResult};
 use crane_domain::{BackupInspection, NamedBytes, Note, Store};
 use eframe::egui::accesskit::Role;
 use egui_kittest::{
@@ -29,7 +29,7 @@ fn draft(dirty: bool) -> Draft {
 fn result(request_id: u64, data: CommandData) -> WorkerResult {
     WorkerResult {
         request_id,
-        result: Ok(CommandResult { revision: 7, data }),
+        outcome: WorkerOutcome::Command(Ok(CommandResult { revision: 7, data })),
     }
 }
 
@@ -88,10 +88,10 @@ fn useful_errors_persist_and_completed_import_refreshes_the_store() {
     let request = controller.take_ready_request(Some(&clean)).unwrap();
     controller.complete(WorkerResult {
         request_id: request.request_id,
-        result: Err(AppError::new(
+        outcome: WorkerOutcome::Command(Err(AppError::new(
             ErrorCode::Io,
             "Could not publish the library export: disk unavailable",
-        )),
+        ))),
     });
     assert_eq!(
         controller.status(),
@@ -229,7 +229,7 @@ fn failed_prerequisite_save_aborts_import_and_keeps_retry_available() {
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
-        harness.run();
+        harness.run_steps(8);
         if !harness.state().has_pending_work() {
             return;
         }

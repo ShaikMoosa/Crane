@@ -117,27 +117,18 @@ fn full_channels_retain_accepted_work_without_blocking_the_gui() {
     );
 
     worker
-        .try_send(WorkerRequest {
-            request_id: 1,
-            command: Command::CreateNote,
-        })
+        .try_send(WorkerRequest::command(1, Command::CreateNote))
         .unwrap();
     gate.wait_until_active();
 
     for request_id in 2..=9 {
         worker
-            .try_send(WorkerRequest {
-                request_id,
-                command: Command::CreateNote,
-            })
+            .try_send(WorkerRequest::command(request_id, Command::CreateNote))
             .expect("eight queued requests fit");
     }
     let started = Instant::now();
     let error = worker
-        .try_send(WorkerRequest {
-            request_id: 10,
-            command: Command::CreateNote,
-        })
+        .try_send(WorkerRequest::command(10, Command::CreateNote))
         .expect_err("ninth queued request reports saturation");
     assert_eq!(error.code, ErrorCode::QueueFull);
     assert!(started.elapsed() < Duration::from_millis(100));
@@ -147,7 +138,10 @@ fn full_channels_retain_accepted_work_without_blocking_the_gui() {
     let mut ids = Vec::new();
     while ids.len() < 9 && Instant::now() < deadline {
         if let Some(result) = worker.try_recv() {
-            assert!(result.result.is_ok());
+            let crane_desktop::worker::WorkerOutcome::Command(outcome) = result.outcome else {
+                panic!("expected command outcome");
+            };
+            assert!(outcome.is_ok());
             ids.push(result.request_id);
         } else {
             std::thread::sleep(Duration::from_millis(5));
@@ -179,22 +173,25 @@ fn worker_save_reopens_from_the_isolated_json_library() {
     let note_id = library.snapshot().store.notes[0].id.clone();
     let worker = spawn_worker(library, Box::new(|| {}));
     worker
-        .try_send(WorkerRequest {
-            request_id: 42,
-            command: Command::SaveNote {
+        .try_send(WorkerRequest::command(
+            42,
+            Command::SaveNote {
                 id: note_id.clone(),
                 title: "Synthetic native title".into(),
                 body: "Synthetic native body #native/check".into(),
                 draft_revision: 7,
             },
-        })
+        ))
         .unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if let Some(result) = worker.try_recv() {
             assert_eq!(result.request_id, 42);
-            assert!(result.result.is_ok());
+            let crane_desktop::worker::WorkerOutcome::Command(outcome) = result.outcome else {
+                panic!("expected command outcome");
+            };
+            assert!(outcome.is_ok());
             break;
         }
         assert!(Instant::now() < deadline, "worker save timed out");

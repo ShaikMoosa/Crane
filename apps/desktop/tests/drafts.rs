@@ -114,7 +114,7 @@ impl WorkerResultForTest {
     fn saved(request_id: u64, draft_revision: u64) -> crane_desktop::worker::WorkerResult {
         crane_desktop::worker::WorkerResult {
             request_id,
-            result: Ok(CommandResult {
+            outcome: crane_desktop::worker::WorkerOutcome::Command(Ok(CommandResult {
                 revision: 1,
                 data: CommandData::Saved {
                     note: crane_domain::Note {
@@ -131,7 +131,7 @@ impl WorkerResultForTest {
                     },
                     draft_revision,
                 },
-            }),
+            })),
         }
     }
 }

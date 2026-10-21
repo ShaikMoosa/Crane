@@ -1,4 +1,3 @@
-use crane_domain::{Collection, Store};
 use crane_storage::ThemeChoice;
 use eframe::egui;
 
@@ -12,18 +11,12 @@ pub enum DataAction {
 
 #[derive(Default)]
 pub struct LibraryActions {
-    pub create: bool,
-    pub collection: Option<Collection>,
-    pub tag: Option<Option<String>>,
     pub toggle_theme: bool,
     pub reduced_motion: Option<bool>,
     pub transfer: Option<DataAction>,
 }
 
 pub struct LibraryView<'a> {
-    pub store: &'a Store,
-    pub active_collection: Collection,
-    pub active_tag: Option<&'a str>,
     pub theme: ThemeChoice,
     pub reduced_motion: bool,
     pub collapsed: bool,
@@ -33,11 +26,10 @@ pub struct LibraryView<'a> {
     pub transfer_status: Option<&'a str>,
 }
 
+/// Renders the rail footer: Data menu, theme, and reduced-motion controls.
+/// Collections and tags live in `crate::sidebar`.
 pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
     let LibraryView {
-        store,
-        active_collection,
-        active_tag,
         theme,
         reduced_motion,
         collapsed,
@@ -47,106 +39,6 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
         transfer_status,
     } = view;
     let mut actions = LibraryActions::default();
-    let mut tags: Vec<_> = store
-        .notes
-        .iter()
-        .flat_map(|note| note.tags.iter().cloned())
-        .collect();
-    tags.sort();
-    tags.dedup();
-
-    let footer_height = if *data_menu_open { 248.0 } else { 128.0 };
-    let content_size = egui::vec2(
-        ui.available_width(),
-        (ui.available_height() - footer_height).max(0.0),
-    );
-    ui.allocate_ui_with_layout(
-        content_size,
-        egui::Layout::top_down(egui::Align::Min),
-        |ui| {
-            ui.heading(if collapsed { "C" } else { "Crane" });
-            if ui
-                .add_enabled(
-                    mutations_enabled,
-                    egui::Button::new(if collapsed { "+" } else { "+  New note" }),
-                )
-                .accessible_name("New note")
-                .clicked()
-            {
-                actions.create = true;
-            }
-            ui.separator();
-            for (collection, label, short) in [
-                (Collection::Notes, "Notes", "N"),
-                (Collection::Pinned, "Pinned", "P"),
-                (Collection::Archive, "Archive", "A"),
-                (Collection::Trash, "Trash", "T"),
-            ] {
-                let count = store
-                    .notes
-                    .iter()
-                    .filter(|note| match collection {
-                        Collection::Notes => !note.archived && !note.trashed,
-                        Collection::Pinned => note.pinned && !note.archived && !note.trashed,
-                        Collection::Archive => note.archived && !note.trashed,
-                        Collection::Trash => note.trashed,
-                    })
-                    .count();
-                let expanded = format!("{label}  {count}");
-                let text = if collapsed { short } else { &expanded };
-                let response = ui.add_enabled(
-                    mutations_enabled,
-                    egui::Button::selectable(active_collection == collection, text),
-                );
-                let response = if collapsed {
-                    response.on_hover_text(label)
-                } else {
-                    response
-                };
-                response.widget_info(|| {
-                    egui::WidgetInfo::selected(
-                        egui::Role::Button,
-                        true,
-                        active_collection == collection,
-                        label,
-                    )
-                });
-                if response.clicked() {
-                    actions.collection = Some(collection);
-                    actions.tag = Some(None);
-                }
-            }
-            if !tags.is_empty() {
-                ui.separator();
-                if !collapsed {
-                    ui.small("TAGS");
-                }
-                egui::ScrollArea::vertical()
-                    .id_salt("crane-library-tags")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for tag in tags {
-                            let label = format!("#{tag}");
-                            let response = ui
-                                .add_enabled(
-                                    mutations_enabled,
-                                    egui::Button::selectable(
-                                        active_tag == Some(tag.as_str()),
-                                        if collapsed { "#" } else { &label },
-                                    ),
-                                )
-                                .accessible_name(&label);
-                            if response.clicked() {
-                                actions.collection = Some(Collection::Notes);
-                                actions.tag = Some(Some(tag));
-                            }
-                        }
-                    });
-            }
-            ui.allocate_space(ui.available_size());
-        },
-    );
-    ui.separator();
     let data = ui
         .add_enabled(
             mutations_enabled,
@@ -165,24 +57,30 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
     if data.clicked() {
         *data_menu_open = !*data_menu_open;
     }
-    if *data_menu_open {
-        for (label, action) in [
-            ("Import Markdown…", DataAction::ImportMarkdown),
-            ("Export library…", DataAction::ExportLibrary),
-            ("Create backup…", DataAction::CreateBackup),
-            ("Restore backup…", DataAction::InspectBackup),
-        ] {
-            if ui
-                .add_enabled(
-                    mutations_enabled,
-                    egui::Button::new(label).min_size(egui::vec2(44.0, 44.0)),
-                )
-                .clicked()
-            {
-                actions.transfer = Some(action);
-                *data_menu_open = false;
+    let mut picked = None;
+    egui::Popup::menu(&data)
+        .open_bool(data_menu_open)
+        .show(|ui| {
+            for (label, action) in [
+                ("Import Markdown…", DataAction::ImportMarkdown),
+                ("Export library…", DataAction::ExportLibrary),
+                ("Create backup…", DataAction::CreateBackup),
+                ("Restore backup…", DataAction::InspectBackup),
+            ] {
+                if ui
+                    .add_enabled(
+                        mutations_enabled,
+                        egui::Button::new(label).min_size(egui::vec2(44.0, 44.0)),
+                    )
+                    .clicked()
+                {
+                    picked = Some(action);
+                }
             }
-        }
+        });
+    if let Some(action) = picked {
+        actions.transfer = Some(action);
+        *data_menu_open = false;
     }
     if let Some(status) = transfer_status {
         ui.small(status);

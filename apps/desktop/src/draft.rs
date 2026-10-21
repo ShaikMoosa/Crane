@@ -1,4 +1,4 @@
-use crate::worker::{WorkerRequest, WorkerResult};
+use crate::worker::{WorkerOutcome, WorkerRequest, WorkerResult};
 use crane_application::{AppError, Command, CommandData, ErrorCode};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -78,12 +78,12 @@ impl DraftCoordinator {
         self.last_edit_millis = now_millis;
         self.close_ready = false;
         if let SaveState::Queued(request) = &mut self.state {
-            request.command = Command::SaveNote {
+            request.replace_command(Command::SaveNote {
                 id: self.current.note_id.clone(),
                 title: self.current.title.clone(),
                 body: self.current.body.clone(),
                 draft_revision: self.current.revision,
-            };
+            });
         }
     }
 
@@ -92,12 +92,12 @@ impl DraftCoordinator {
         self.last_edit_millis = now_millis;
         self.close_ready = false;
         if let SaveState::Queued(request) = &mut self.state {
-            request.command = Command::SaveNote {
+            request.replace_command(Command::SaveNote {
                 id: self.current.note_id.clone(),
                 title: self.current.title.clone(),
                 body: self.current.body.clone(),
                 draft_revision: self.current.revision,
-            };
+            });
         }
     }
 
@@ -165,20 +165,24 @@ impl DraftCoordinator {
     }
 
     pub fn complete(&mut self, result: WorkerResult) {
-        match result.result {
+        let request_id = result.request_id;
+        let WorkerOutcome::Command(result) = result.outcome else {
+            return;
+        };
+        match result {
             Ok(command_result) => match command_result.data {
                 CommandData::Saved { draft_revision, .. } => {
-                    self.complete_success(result.request_id, draft_revision);
+                    self.complete_success(request_id, draft_revision);
                 }
                 _ => self.complete_failure(
-                    result.request_id,
+                    request_id,
                     AppError::new(
                         ErrorCode::Busy,
                         "The editor received an unexpected worker result.",
                     ),
                 ),
             },
-            Err(error) => self.complete_failure(result.request_id, error),
+            Err(error) => self.complete_failure(request_id, error),
         }
     }
 
@@ -234,15 +238,15 @@ impl DraftCoordinator {
     }
 
     fn queue_save(&mut self) {
-        let request = WorkerRequest {
-            request_id: NEXT_DRAFT_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
-            command: Command::SaveNote {
+        let request = WorkerRequest::command(
+            NEXT_DRAFT_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
+            Command::SaveNote {
                 id: self.current.note_id.clone(),
                 title: self.current.title.clone(),
                 body: self.current.body.clone(),
                 draft_revision: self.current.revision,
             },
-        };
+        );
         self.state = SaveState::Queued(request);
     }
 

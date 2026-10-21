@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
-        harness.run();
+        harness.run_steps(8);
         if !harness.state().has_pending_work() {
             return;
         }

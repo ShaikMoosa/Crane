@@ -1,3 +1,4 @@
+use crane_application::knowledge::{Query, QueryResponse};
 use crane_application::{AppError, Command, CommandResult, ErrorCode, Library};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread::{self, JoinHandle};
@@ -5,31 +6,70 @@ use std::thread::{self, JoinHandle};
 const CHANNEL_CAPACITY: usize = 8;
 
 #[derive(Clone, Debug)]
+pub enum WorkerRequestKind {
+    Command(Command),
+    Query(Query),
+}
+
+#[derive(Clone, Debug)]
 pub struct WorkerRequest {
     pub request_id: u64,
-    pub command: Command,
+    pub kind: WorkerRequestKind,
 }
 
 impl WorkerRequest {
+    pub fn command(request_id: u64, command: Command) -> Self {
+        Self {
+            request_id,
+            kind: WorkerRequestKind::Command(command),
+        }
+    }
+
+    pub fn query(request_id: u64, query: Query) -> Self {
+        Self {
+            request_id,
+            kind: WorkerRequestKind::Query(query),
+        }
+    }
+
+    pub fn replace_command(&mut self, command: Command) {
+        self.kind = WorkerRequestKind::Command(command);
+    }
+
+    pub fn command_ref(&self) -> Option<&Command> {
+        match &self.kind {
+            WorkerRequestKind::Command(command) => Some(command),
+            WorkerRequestKind::Query(_) => None,
+        }
+    }
+
     pub fn draft_revision(&self) -> Option<u64> {
-        match &self.command {
-            Command::SaveNote { draft_revision, .. } => Some(*draft_revision),
+        match &self.kind {
+            WorkerRequestKind::Command(Command::SaveNote { draft_revision, .. }) => {
+                Some(*draft_revision)
+            }
             _ => None,
         }
     }
 
     pub fn save_body(&self) -> Option<&str> {
-        match &self.command {
-            Command::SaveNote { body, .. } => Some(body),
+        match &self.kind {
+            WorkerRequestKind::Command(Command::SaveNote { body, .. }) => Some(body),
             _ => None,
         }
     }
 }
 
 #[derive(Clone, Debug)]
+pub enum WorkerOutcome {
+    Command(Result<CommandResult, AppError>),
+    Query(QueryResponse),
+}
+
+#[derive(Clone, Debug)]
 pub struct WorkerResult {
     pub request_id: u64,
-    pub result: Result<CommandResult, AppError>,
+    pub outcome: WorkerOutcome,
 }
 
 pub struct WorkerHandle {
@@ -74,9 +114,15 @@ pub fn spawn_worker(mut library: Library, wake: Box<dyn Fn() + Send>) -> WorkerH
         .name("crane-library-worker".into())
         .spawn(move || {
             while let Ok(request) = request_receiver.recv() {
+                let outcome = match request.kind {
+                    WorkerRequestKind::Command(command) => {
+                        WorkerOutcome::Command(library.execute(command))
+                    }
+                    WorkerRequestKind::Query(query) => WorkerOutcome::Query(library.query(query)),
+                };
                 let result = WorkerResult {
                     request_id: request.request_id,
-                    result: library.execute(request.command),
+                    outcome,
                 };
                 if result_sender.send(result).is_err() {
                     break;
