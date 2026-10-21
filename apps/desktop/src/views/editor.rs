@@ -1,6 +1,7 @@
 use crate::draft::DraftCoordinator;
+use crate::formatting::FormattingState;
 use crate::icons::{icon_button, IconId};
-use crate::knowledge_navigation::{char_to_byte, CompletionState, WikiFragment};
+use crate::knowledge_navigation::{byte_to_char, char_to_byte, CompletionState, WikiFragment};
 use crate::views::preview::PreviewAction;
 use crane_application::knowledge::Query;
 use crane_domain::knowledge::WikiLink;
@@ -43,6 +44,10 @@ pub struct CompletionView<'a> {
     pub emit_query: &'a mut dyn FnMut(Query),
 }
 
+pub struct FormattingView<'a> {
+    pub state: &'a mut FormattingState,
+}
+
 pub struct EditorView<'a> {
     pub flags: NoteFlags,
     pub preview: bool,
@@ -55,6 +60,7 @@ pub struct EditorView<'a> {
     pub status: Option<&'a str>,
     pub mutations_enabled: bool,
     pub completion: Option<CompletionView<'a>>,
+    pub formatting: Option<FormattingView<'a>>,
 }
 
 pub fn show(
@@ -73,6 +79,7 @@ pub fn show(
         status,
         mutations_enabled,
         mut completion,
+        mut formatting,
     } = view;
     let mut actions = EditorActions::default();
     let note_id = draft.current().note_id.clone();
@@ -167,6 +174,7 @@ pub fn show(
             caret_jump,
             mutations_enabled,
             &mut completion,
+            &mut formatting,
             &mut actions,
         );
     }
@@ -183,6 +191,7 @@ fn show_body(
     caret_jump: Option<usize>,
     mutations_enabled: bool,
     completion: &mut Option<CompletionView<'_>>,
+    formatting: &mut Option<FormattingView<'_>>,
     actions: &mut EditorActions,
 ) {
     let mut accept_index = None;
@@ -288,6 +297,71 @@ fn show_body(
             );
         }
     }
+
+    if let Some(format_view) = formatting.as_mut() {
+        let live_range = TextEditState::load(ui.ctx(), response_id)
+            .and_then(|state| state.cursor.char_range())
+            .map(|range| (range.primary.index.0, range.secondary.index.0));
+        if let Some(action) = crate::formatting::show(ui, format_view.state, mutations_enabled) {
+            let selected = match live_range {
+                Some((a, b)) if a != b => (a, b),
+                _ => format_view.state.last_char_range.unwrap_or((0, 0)),
+            };
+            actions.changed |= apply_format_action(
+                ui.ctx(),
+                response_id,
+                &mut draft.current_mut().body,
+                selected,
+                &action,
+                &body_response,
+            );
+        }
+        format_view.state.last_char_range = live_range;
+    }
+}
+
+fn snapshot_undo_point(ctx: &egui::Context, body_id: egui::Id, body: &str) {
+    if let Some(text_state) = TextEditState::load(ctx, body_id) {
+        if let Some(range) = text_state.cursor.char_range() {
+            let mut undoer = text_state.undoer();
+            undoer.add_undo(&(range, body.to_owned()));
+            let mut text_state = text_state;
+            text_state.set_undoer(undoer);
+            text_state.store(ctx, body_id);
+        }
+    }
+}
+
+fn apply_format_action(
+    ctx: &egui::Context,
+    response_id: egui::Id,
+    body: &mut String,
+    selected: (usize, usize),
+    action: &crate::formatting::FormatAction,
+    body_response: &egui::Response,
+) -> bool {
+    let start_char = selected.0.min(selected.1);
+    let end_char = selected.0.max(selected.1);
+    let byte_range = char_to_byte(body, start_char)..char_to_byte(body, end_char);
+    let outcome = crate::formatting::apply_format(body, byte_range, action);
+    if !outcome.applied {
+        return false;
+    }
+    snapshot_undo_point(ctx, response_id, body);
+    *body = outcome.body;
+    let new_start = byte_to_char(body, outcome.selection.start);
+    let new_end = byte_to_char(body, outcome.selection.end);
+    if let Some(mut text_state) = TextEditState::load(ctx, response_id) {
+        let range = if new_start == new_end {
+            CCursorRange::one(CCursor::new(new_start))
+        } else {
+            CCursorRange::two(CCursor::new(new_start), CCursor::new(new_end))
+        };
+        text_state.cursor.set_char_range(Some(range));
+        text_state.store(ctx, response_id);
+    }
+    body_response.request_focus();
+    true
 }
 
 fn track_ime(ui: &egui::Ui, state: &mut CompletionState) {
@@ -322,15 +396,7 @@ fn apply_completion_at(
     // Snapshot the pre-completion state as an explicit undo point: the
     // automatic undoer only banks points after the text rests, so without
     // this Ctrl+Z would jump past the pre-completion body.
-    if let Some(text_state) = TextEditState::load(ctx, body_id) {
-        if let Some(range) = text_state.cursor.char_range() {
-            let mut undoer = text_state.undoer();
-            undoer.add_undo(&(range, body.clone()));
-            let mut text_state = text_state;
-            text_state.set_undoer(undoer);
-            text_state.store(ctx, body_id);
-        }
-    }
+    snapshot_undo_point(ctx, body_id, body);
     let Some(caret_char) = state.apply_candidate(body, index) else {
         return false;
     };

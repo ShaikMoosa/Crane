@@ -1,4 +1,5 @@
 use crate::draft::{Draft, DraftCoordinator};
+use crate::formatting::FormattingState;
 use crate::inspector::{InspectorIntent, InspectorState};
 use crate::knowledge_navigation::{
     ChooserIntent, ChooserState, CompletionState, KnowledgeNavIntent,
@@ -141,6 +142,7 @@ pub struct CraneApp {
     draft_facts: Option<(String, u64, NoteFacts)>,
     committed_knowledge: Option<(String, u64, KnowledgeView)>,
     inspector_floating: bool,
+    formatting: FormattingState,
 }
 
 impl CraneApp {
@@ -246,6 +248,7 @@ impl CraneApp {
             draft_facts: None,
             committed_knowledge: None,
             inspector_floating: false,
+            formatting: FormattingState::default(),
         }
     }
 
@@ -870,6 +873,9 @@ impl CraneApp {
                         state: &mut self.completion,
                         emit_query: &mut emit,
                     }),
+                    formatting: Some(editor::FormattingView {
+                        state: &mut self.formatting,
+                    }),
                 },
             )
         } else {
@@ -888,6 +894,7 @@ impl CraneApp {
                     status: status.as_deref(),
                     mutations_enabled: false,
                     completion: None,
+                    formatting: None,
                 },
             )
         };

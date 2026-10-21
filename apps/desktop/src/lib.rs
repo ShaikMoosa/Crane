@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod draft;
+pub mod formatting;
 pub mod icons;
 pub mod inspector;
 pub mod knowledge_navigation;
