@@ -1,5 +1,6 @@
 mod backup;
 mod error;
+pub mod knowledge;
 mod markdown;
 mod model;
 mod preview;
