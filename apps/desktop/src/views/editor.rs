@@ -1,4 +1,5 @@
 use crate::draft::DraftCoordinator;
+use crate::icons::{icon_button, IconId};
 use crate::knowledge_navigation::{char_to_byte, CompletionState, WikiFragment};
 use crate::views::preview::PreviewAction;
 use crane_application::knowledge::Query;
@@ -27,6 +28,7 @@ pub struct EditorActions {
     pub export_note: bool,
     pub link_error: Option<String>,
     pub wiki_link: Option<WikiLink>,
+    pub toggle_inspector: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -75,46 +77,39 @@ pub fn show(
     let mut actions = EditorActions::default();
     let note_id = draft.current().note_id.clone();
     ui.horizontal_wrapped(|ui| {
-        actions.toggle_pin = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::new(if flags.pinned {
-                    "Unpin note"
-                } else {
-                    "Pin note"
-                }),
-            )
-            .clicked();
-        actions.toggle_archive = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::new(if flags.archived {
-                    "Unarchive note"
-                } else {
-                    "Archive note"
-                }),
-            )
-            .clicked();
-        actions.toggle_trash = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::new(if flags.trashed {
-                    "Restore note"
-                } else {
-                    "Move to Trash"
-                }),
-            )
-            .clicked();
-        actions.toggle_preview = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::new(if preview {
-                    "Edit Markdown"
-                } else {
-                    "Preview Markdown"
-                }),
-            )
-            .clicked();
+        let pin_name = if flags.pinned {
+            "Unpin note"
+        } else {
+            "Pin note"
+        };
+        actions.toggle_pin =
+            icon_button(ui, IconId::Pin, pin_name, pin_name).clicked() && mutations_enabled;
+        let archive_name = if flags.archived {
+            "Unarchive note"
+        } else {
+            "Archive note"
+        };
+        actions.toggle_archive = icon_button(ui, IconId::Archive, archive_name, archive_name)
+            .clicked()
+            && mutations_enabled;
+        let trash_name = if flags.trashed {
+            "Restore note"
+        } else {
+            "Move to Trash"
+        };
+        actions.toggle_trash =
+            icon_button(ui, IconId::Trash, trash_name, trash_name).clicked() && mutations_enabled;
+        let preview_name = if preview {
+            "Edit Markdown"
+        } else {
+            "Preview Markdown"
+        };
+        let preview_icon = if preview { IconId::Pencil } else { IconId::Eye };
+        actions.toggle_preview = icon_button(ui, preview_icon, preview_name, preview_name)
+            .clicked()
+            && mutations_enabled;
+        actions.toggle_inspector =
+            icon_button(ui, IconId::Info, "Note information", "Note information").clicked();
         actions.export_note = ui
             .add_enabled(
                 mutations_enabled,

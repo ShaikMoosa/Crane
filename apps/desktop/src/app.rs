@@ -1,4 +1,5 @@
 use crate::draft::{Draft, DraftCoordinator};
+use crate::inspector::{InspectorIntent, InspectorState};
 use crate::knowledge_navigation::{
     ChooserIntent, ChooserState, CompletionState, KnowledgeNavIntent,
 };
@@ -11,12 +12,12 @@ use crate::view_state::{layout_mode, LayoutMode, ViewState};
 use crate::views::{editor, library, note_list, restore};
 use crate::worker::{spawn_worker, WorkerHandle, WorkerOutcome, WorkerRequest, WorkerResult};
 use crane_application::knowledge::{
-    CollectionView, Query, QueryData, ResolutionView, SidebarCounts,
+    CollectionView, KnowledgeView, Query, QueryData, ResolutionView, SidebarCounts,
 };
 use crane_application::{
     AppError, Command, CommandData, ErrorCode, Library, LibrarySnapshot, NoteState,
 };
-use crane_domain::knowledge::{HeadingResolution, TagNode, WikiLink};
+use crane_domain::knowledge::{parse_draft_facts, HeadingResolution, NoteFacts, TagNode, WikiLink};
 use crane_domain::{parse_preview, MarkdownDocument, Note, Store};
 use crane_storage::{NativeSettings, ThemeChoice};
 use eframe::egui;
@@ -47,6 +48,7 @@ enum PendingQuery {
     QuickOpen(u64),
     CompleteWikiLink(u64),
     ResolveWikiLink(u64),
+    KnowledgeFor { note_id: String, revision: u64 },
 }
 
 #[derive(Default)]
@@ -135,6 +137,10 @@ pub struct CraneApp {
     resolve_link: Option<WikiLink>,
     pending_wiki_jump: Option<PendingWikiJump>,
     preview_scroll_anchor: Option<String>,
+    inspector: InspectorState,
+    draft_facts: Option<(String, u64, NoteFacts)>,
+    committed_knowledge: Option<(String, u64, KnowledgeView)>,
+    inspector_floating: bool,
 }
 
 impl CraneApp {
@@ -236,6 +242,10 @@ impl CraneApp {
             resolve_link: None,
             pending_wiki_jump: None,
             preview_scroll_anchor: None,
+            inspector: InspectorState::default(),
+            draft_facts: None,
+            committed_knowledge: None,
+            inspector_floating: false,
         }
     }
 
@@ -551,6 +561,9 @@ impl CraneApp {
             {
                 self.apply_resolution(view);
             }
+            (PendingQuery::KnowledgeFor { note_id, revision }, QueryData::Knowledge(view)) => {
+                self.committed_knowledge = Some((note_id, revision, *view));
+            }
             _ => {}
         }
     }
@@ -739,6 +752,37 @@ impl CraneApp {
     }
 
     fn show_editor(&mut self, ui: &mut egui::Ui) {
+        let has_selection = self.view.selected_id.is_some();
+        let docked = has_selection && self.inspector.open && ui.available_width() >= 760.0;
+        self.inspector_floating = has_selection && self.inspector.open && !docked;
+        if docked {
+            ui.horizontal(|ui| {
+                let main_width = (ui.available_width() - 320.0).max(200.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(main_width, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| self.show_editor_main(ui),
+                );
+                ui.separator();
+                ui.allocate_ui_with_layout(
+                    egui::vec2(320.0, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| self.show_inspector(ui),
+                );
+            });
+        } else {
+            self.show_editor_main(ui);
+            if self.inspector_floating {
+                egui::Window::new("Inspector")
+                    .id(egui::Id::unique("inspector-float"))
+                    .anchor(egui::Align2::RIGHT_TOP, [-16.0, 16.0])
+                    .default_size([320.0, 480.0])
+                    .show(ui.ctx(), |ui| self.show_inspector(ui));
+            }
+        }
+    }
+
+    fn show_editor_main(&mut self, ui: &mut egui::Ui) {
         let Some(selected_id) = self.view.selected_id.clone() else {
             ui.heading("A quiet place for bright ideas");
             if ui
@@ -864,6 +908,9 @@ impl CraneApp {
         if mutation_enabled && actions.toggle_preview {
             self.view.preview = !self.view.preview;
         }
+        if actions.toggle_inspector {
+            self.inspector.open = !self.inspector.open;
+        }
         if mutation_enabled && actions.export_note {
             self.begin_transfer(Command::ExportNote {
                 id: selected_id.clone(),
@@ -905,6 +952,92 @@ impl CraneApp {
                 Query::ResolveWikiLink { link },
                 PendingQuery::ResolveWikiLink(sequence),
             );
+        }
+    }
+
+    fn show_inspector(&mut self, ui: &mut egui::Ui) {
+        let Some(draft) = self.draft.as_ref() else {
+            return;
+        };
+        let (note_id, revision, dirty) = {
+            let current = draft.current();
+            (
+                current.note_id.clone(),
+                current.revision,
+                current.is_dirty(),
+            )
+        };
+        let facts_fresh = self
+            .draft_facts
+            .as_ref()
+            .is_some_and(|(id, rev, _)| *id == note_id && *rev == revision);
+        if !facts_fresh {
+            let current = self.draft.as_ref().expect("draft checked above").current();
+            let facts = parse_draft_facts(&current.note_id, &current.title, &current.body);
+            self.draft_facts = Some((note_id.clone(), revision, facts));
+        }
+        let store_revision = self.store_revision;
+        let knowledge_fresh = self
+            .committed_knowledge
+            .as_ref()
+            .is_some_and(|(id, rev, _)| *id == note_id && *rev == store_revision);
+        let knowledge_pending = self.pending_queries.values().any(
+            |query| matches!(query, PendingQuery::KnowledgeFor { note_id: id, revision: rev } if id == &note_id && *rev == store_revision),
+        );
+        if !knowledge_fresh && !knowledge_pending {
+            self.send_query(
+                Query::KnowledgeFor {
+                    note_id: note_id.clone(),
+                },
+                PendingQuery::KnowledgeFor {
+                    note_id: note_id.clone(),
+                    revision: store_revision,
+                },
+            );
+        }
+        let facts = self
+            .draft_facts
+            .as_ref()
+            .map(|(_, _, facts)| facts)
+            .expect("draft facts cached above");
+        let committed = self
+            .committed_knowledge
+            .as_ref()
+            .and_then(|(id, rev, view)| (*id == note_id && *rev == store_revision).then_some(view));
+        let theme = self.settings.value().theme;
+        let intent =
+            crate::inspector::show(ui, &mut self.inspector, facts, committed, dirty, theme);
+        match intent {
+            InspectorIntent::OpenNote { note_id, heading } => {
+                self.apply_nav_intent(KnowledgeNavIntent::OpenNote { note_id, heading });
+            }
+            InspectorIntent::JumpToHeading { range } => {
+                if self.view.preview {
+                    let anchor = self
+                        .committed_knowledge
+                        .as_ref()
+                        .and_then(|(id, rev, view)| {
+                            if *id == note_id && *rev == store_revision {
+                                view.outline
+                                    .iter()
+                                    .find(|item| item.range == range)
+                                    .map(|item| item.anchor.clone())
+                            } else {
+                                None
+                            }
+                        });
+                    if let Some(anchor) = anchor {
+                        self.preview_scroll_anchor = Some(anchor);
+                    }
+                } else {
+                    self.pending_wiki_jump = Some(PendingWikiJump {
+                        note_id: note_id.clone(),
+                        byte_offset: range.start,
+                        anchor: String::new(),
+                    });
+                }
+            }
+            InspectorIntent::None => {}
         }
     }
 
@@ -1025,7 +1158,12 @@ impl CraneApp {
                 );
                 self.view.status = Some("Updating note…".into());
             }
-            DeferredAction::Mobile(pane) => self.mobile_pane = pane,
+            DeferredAction::Mobile(pane) => {
+                if self.inspector_floating {
+                    self.inspector.open = false;
+                }
+                self.mobile_pane = pane;
+            }
             DeferredAction::FocusSearch => {
                 self.mobile_pane = MobilePane::NoteList;
                 self.request_search_focus = true;
