@@ -1,7 +1,11 @@
+pub mod index;
 pub mod parser;
 pub mod statistics;
 pub mod tags;
 
+pub use index::{
+    context_excerpt, HeadingResolution, InboundLink, KnowledgeIndex, NoteVisibility, Resolution,
+};
 pub use parser::{
     normalize_heading_anchor, normalize_title, parse_headings, parse_wiki_links, HeadingFact,
     HeadingTarget, WikiLink,
