@@ -45,7 +45,11 @@ pub fn show(
             intent = Some(SidebarIntent::Create);
         }
     } else if ui
-        .add_enabled(mutations_enabled, egui::Button::new("+  New note"))
+        .add_enabled(
+            mutations_enabled,
+            egui::Button::new("+  New note")
+                .min_size(egui::vec2(0.0, crate::icons::target_size(ui))),
+        )
         .accessible_name("New note")
         .clicked()
     {
@@ -141,9 +145,14 @@ fn show_tag(
             } else {
                 ("v", format!("Collapse {}", node.path))
             };
+            let edge = crate::icons::target_size(ui);
             let toggle = ui
-                .add_enabled(mutations_enabled, egui::Button::new(glyph))
-                .accessible_name(&name);
+                .add_enabled(
+                    mutations_enabled,
+                    egui::Button::new(glyph).min_size(egui::vec2(edge, edge)),
+                )
+                .accessible_name(&name)
+                .on_hover_text(&name);
             if toggle.clicked() {
                 if is_collapsed {
                     state.collapsed_tags.remove(&node.path);

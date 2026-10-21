@@ -30,6 +30,7 @@ pub struct EditorActions {
     pub link_error: Option<String>,
     pub wiki_link: Option<WikiLink>,
     pub toggle_inspector: bool,
+    pub toggle_focus_mode: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -84,6 +85,13 @@ pub fn show(
     let mut actions = EditorActions::default();
     let note_id = draft.current().note_id.clone();
     ui.horizontal_wrapped(|ui| {
+        actions.toggle_focus_mode = icon_button(
+            ui,
+            IconId::PanelLeft,
+            "Toggle focus mode",
+            "Toggle focus mode",
+        )
+        .clicked();
         let pin_name = if flags.pinned {
             "Unpin note"
         } else {

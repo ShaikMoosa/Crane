@@ -265,7 +265,10 @@ impl CraneApp {
         let request_data_focus = self.transfers.take_data_focus_request();
 
         let mode = layout_mode(ui.available_width());
-        if mode == LayoutMode::SinglePane {
+        if self.view.focus_mode {
+            theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
+            self.show_editor(ui);
+        } else if mode == LayoutMode::SinglePane {
             match self.mobile_pane {
                 MobilePane::Library => {
                     theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
@@ -347,6 +350,7 @@ impl CraneApp {
         if !self.quick_open.open {
             return;
         }
+        let was_open = self.quick_open.open;
         let mut outgoing = None;
         let intent = {
             let state = &mut self.quick_open;
@@ -360,8 +364,10 @@ impl CraneApp {
             self.send_query(query, PendingQuery::QuickOpen(sequence));
         }
         if let Some(QuickOpenIntent::OpenNote(note_id)) = intent {
-            self.request_body_focus = true;
             self.request_after_save(DeferredAction::Select(note_id));
+        }
+        if was_open && !self.quick_open.open {
+            self.request_body_focus = true;
         }
     }
 
@@ -369,6 +375,7 @@ impl CraneApp {
         if !self.chooser.open {
             return;
         }
+        let was_open = self.chooser.open;
         let intent = crate::knowledge_navigation::show_chooser(ctx, &mut self.chooser);
         match intent {
             Some(ChooserIntent::OpenNote(note_id)) => {
@@ -381,6 +388,9 @@ impl CraneApp {
                 self.apply_nav_intent(KnowledgeNavIntent::CreateNote { title });
             }
             Some(ChooserIntent::Close) | None => {}
+        }
+        if was_open && !self.chooser.open {
+            self.request_body_focus = true;
         }
     }
 
@@ -758,6 +768,7 @@ impl CraneApp {
         let has_selection = self.view.selected_id.is_some();
         let docked = has_selection && self.inspector.open && ui.available_width() >= 760.0;
         self.inspector_floating = has_selection && self.inspector.open && !docked;
+        let inspector_was_open = self.inspector.open;
         if docked {
             ui.horizontal(|ui| {
                 let main_width = (ui.available_width() - 320.0).max(200.0);
@@ -782,6 +793,9 @@ impl CraneApp {
                     .default_size([320.0, 480.0])
                     .show(ui.ctx(), |ui| self.show_inspector(ui));
             }
+        }
+        if inspector_was_open && !self.inspector.open {
+            self.request_body_focus = true;
         }
     }
 
@@ -917,6 +931,9 @@ impl CraneApp {
         }
         if actions.toggle_inspector {
             self.inspector.open = !self.inspector.open;
+        }
+        if actions.toggle_focus_mode {
+            self.view.focus_mode = !self.view.focus_mode;
         }
         if mutation_enabled && actions.export_note {
             self.begin_transfer(Command::ExportNote {
@@ -1166,9 +1183,7 @@ impl CraneApp {
                 self.view.status = Some("Updating note…".into());
             }
             DeferredAction::Mobile(pane) => {
-                if self.inspector_floating {
-                    self.inspector.open = false;
-                }
+                self.close_floating_inspector();
                 self.mobile_pane = pane;
             }
             DeferredAction::FocusSearch => {
@@ -1488,19 +1503,38 @@ impl CraneApp {
         if search && self.transfers.can_mutate() {
             self.request_after_save(DeferredAction::FocusSearch);
         }
-        if escape
-            && !self.quick_open.open
-            && !self.chooser.open
-            && !self.completion.popup_visible()
-            && self.transfers.can_mutate()
-        {
-            let target = match self.mobile_pane {
-                MobilePane::Editor => MobilePane::NoteList,
-                MobilePane::NoteList => MobilePane::Library,
-                MobilePane::Library => MobilePane::Library,
-            };
-            self.request_after_save(DeferredAction::Mobile(target));
+        if escape && self.transfers.can_mutate() {
+            self.dismiss_top_for_escape();
         }
+    }
+
+    fn close_floating_inspector(&mut self) {
+        if self.inspector_floating {
+            self.inspector.open = false;
+        }
+    }
+
+    /// Central Escape stack: completion, Quick Open, and the chooser consume
+    /// their own Escape during rendering, so reaching here means dismissing
+    /// the floating inspector, then focus mode, then single-pane back.
+    fn dismiss_top_for_escape(&mut self) {
+        if self.completion.popup_visible() || self.quick_open.open || self.chooser.open {
+            return;
+        }
+        if self.inspector.open && self.inspector_floating {
+            self.inspector.open = false;
+            return;
+        }
+        if self.view.focus_mode {
+            self.view.focus_mode = false;
+            return;
+        }
+        let target = match self.mobile_pane {
+            MobilePane::Editor => MobilePane::NoteList,
+            MobilePane::NoteList => MobilePane::Library,
+            MobilePane::Library => MobilePane::Library,
+        };
+        self.request_after_save(DeferredAction::Mobile(target));
     }
 
     fn logic(&mut self, context: &egui::Context) {

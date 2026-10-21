@@ -2,6 +2,7 @@ mod common;
 
 use common::{app, note};
 use crane_desktop::view_state::{layout_mode, LayoutMode};
+use eframe::egui::accesskit::Role;
 use egui_kittest::{kittest::Queryable, Harness};
 use std::time::{Duration, Instant};
 
@@ -216,6 +217,165 @@ fn sidebar_shows_derived_collections_and_tag_hierarchy() {
     harness.get_by_label("#project").click();
     settle(&mut harness);
     harness.get_by_label("Alpha");
+}
+
+#[test]
+fn focus_mode_hides_chrome_and_restores_selection() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "first", 3),
+        note("b", "Beta", "second", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    let before = harness.state().selected_note_id().map(str::to_owned);
+    harness.get_by_label("Notes");
+
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run_steps(4);
+    assert!(harness.query_by_label("Notes").is_none());
+    harness.get_by_role_and_label(Role::MultilineTextInput, "Note body");
+
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run_steps(4);
+    harness.get_by_label("Notes");
+    assert_eq!(
+        harness.state().selected_note_id().map(str::to_owned),
+        before
+    );
+}
+
+#[test]
+fn escape_after_overlays_close_exits_focus_mode() {
+    let (app, _) = app(vec![note("a", "Alpha", "first", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run_steps(2);
+    assert!(harness.query_by_label("Notes").is_none());
+
+    harness.key_press_modifiers(eframe::egui::Modifiers::CTRL, eframe::egui::Key::O);
+    harness.run_steps(4);
+    harness.get_by_role_and_label(Role::TextInput, "Quick Open");
+
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(4);
+    assert!(harness
+        .query_by_role_and_label(Role::TextInput, "Quick Open")
+        .is_none());
+    assert!(harness.query_by_label("Notes").is_none());
+
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(4);
+    harness.get_by_label("Notes");
+}
+
+fn editor_body_x(width: f32) -> f32 {
+    let (app, _) = app(vec![note("a", "Alpha", "body", 1)]);
+    let harness = Harness::builder()
+        .with_size([width, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .rect()
+        .min
+        .x
+}
+
+#[test]
+fn pane_widths_follow_layout_breakpoints() {
+    let wide = editor_body_x(1240.0);
+    assert!(
+        (wide - 622.0).abs() < 28.0,
+        "wide editor x was {wide}, expected ~622 (236 rail + 330 list + panel chrome)"
+    );
+    let collapsed = editor_body_x(800.0);
+    assert!(
+        (collapsed - 418.0).abs() < 28.0,
+        "collapsed editor x was {collapsed}, expected ~418 (72 rail + 290 list + panel chrome)"
+    );
+}
+
+fn assert_icon_target(
+    harness: &Harness<'_, crane_desktop::app::CraneApp>,
+    label: &str,
+    minimum: f32,
+) {
+    let node = harness.get_by_role_and_label(Role::Button, label);
+    let rect = node.rect();
+    assert!(
+        rect.width() >= minimum && rect.height() >= minimum,
+        "{label} was {rect:?}, expected at least {minimum} points"
+    );
+}
+
+#[test]
+fn responsive_layouts_keep_controls_findable_sized_and_rectangular() {
+    for width in [1240.0, 800.0] {
+        let (app, _) = app(vec![
+            note("a", "Alpha", "Work #project/crane", 3),
+            note("b", "Beta", "second", 2),
+        ]);
+        let mut harness = Harness::builder()
+            .with_size([width, 780.0])
+            .build_ui_state(|ui, app| app.show(ui), app);
+        settle(&mut harness);
+        harness.get_by_label("Collapse project").click();
+        harness.run_steps(2);
+
+        for label in [
+            "New note",
+            "Quick Open",
+            "Note information",
+            "Toggle focus mode",
+            "Heading",
+            "Task list",
+            "Bulleted list",
+            "Numbered list",
+            "Quote",
+            "Bold",
+            "Italic",
+            "Inline code",
+            "Code block",
+            "Insert link",
+            "Expand project",
+        ] {
+            assert_icon_target(&harness, label, 40.0);
+        }
+
+        let row = harness.get_by_label("Alpha").rect();
+        assert!(
+            row.width() > row.height(),
+            "note row was not rectangular: {row:?}"
+        );
+    }
+}
+
+#[test]
+fn compact_mode_targets_are_at_least_44_points() {
+    let (app, _) = app(vec![note("a", "Alpha", "Work #project/crane", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([640.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+
+    for label in ["Note information", "Toggle focus mode", "Bold"] {
+        assert_icon_target(&harness, label, 44.0);
+    }
+
+    harness.get_by_label("Back to notes").click();
+    harness.run_steps(2);
+    assert_icon_target(&harness, "Quick Open", 44.0);
+
+    harness.get_by_label("Open library").click();
+    settle(&mut harness);
+    assert_icon_target(&harness, "New note", 44.0);
+    harness.get_by_label("Collapse project").click();
+    harness.run_steps(2);
+    assert_icon_target(&harness, "Expand project", 44.0);
 }
 
 #[test]

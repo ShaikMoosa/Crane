@@ -131,6 +131,86 @@ fn preview_preserves_nested_link_roles_and_reports_open_failures() {
 }
 
 #[test]
+fn connected_knowledge_controls_have_accessible_names() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body #project/crane", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    for label in [
+        "Quick Open",
+        "Note information",
+        "Toggle focus mode",
+        "Heading",
+        "Task list",
+        "Bulleted list",
+        "Numbered list",
+        "Quote",
+        "Bold",
+        "Italic",
+        "Inline code",
+        "Code block",
+        "Insert link",
+    ] {
+        harness.get_by_role_and_label(Role::Button, label);
+    }
+
+    harness.get_by_label("Note information").click();
+    harness.run();
+    for label in ["Statistics", "Outline", "Links", "Backlinks"] {
+        harness.get_by_role_and_label(Role::Button, label);
+    }
+
+    harness.get_by_label("Collapse project").click();
+    harness.run();
+    harness.get_by_role_and_label(Role::Button, "Expand project");
+
+    harness.get_by_label("Use light theme").click();
+    harness.run();
+    for label in [
+        "Quick Open",
+        "Bold",
+        "Statistics",
+        "Expand project",
+        "Use dark theme",
+    ] {
+        harness.get_by_role_and_label(Role::Button, label);
+    }
+}
+
+#[test]
+fn tab_traversal_reaches_formatting_and_inspector_in_order() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    harness.get_by_label("Note information").click();
+    harness.run();
+
+    let mut body_step = None;
+    let mut bold_step = None;
+    let mut statistics_step = None;
+    for step in 0..96 {
+        harness.key_press(Key::Tab);
+        harness.run();
+        if harness.get_by_label("Note body").is_focused() {
+            body_step.get_or_insert(step);
+        }
+        if harness.get_by_label("Bold").is_focused() {
+            bold_step.get_or_insert(step);
+        }
+        if harness.get_by_label("Statistics").is_focused() {
+            statistics_step.get_or_insert(step);
+        }
+    }
+    let body_step = body_step.expect("Tab order never reached the note body");
+    let bold_step = bold_step.expect("Tab order never reached the formatting bar");
+    let statistics_step = statistics_step.expect("Tab order never reached the inspector");
+    assert!(body_step < bold_step);
+    assert!(bold_step < statistics_step);
+}
+
+#[test]
 fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
     let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
     let mut harness = Harness::builder()
@@ -141,7 +221,7 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
     let mut search_step = None;
     let mut save_step = None;
     let mut body_step = None;
-    for step in 0..32 {
+    for step in 0..64 {
         harness.key_press(Key::Tab);
         harness.run();
         if harness.get_by_label("New note").is_focused() {

@@ -278,6 +278,18 @@ fn icon_image(id: IconId, color: egui::Color32, size: f32) -> egui::Image<'stati
     egui::Image::from_bytes(uri, svg.into_bytes()).fit_to_exact_size(egui::vec2(size, size))
 }
 
+/// Minimum touch/click target edge: 40 points on desktop, 44 in compact
+/// single-pane mode, per the responsive layout spec.
+pub fn target_size(ui: &egui::Ui) -> f32 {
+    let compact = crate::view_state::layout_mode(ui.ctx().viewport_rect().width())
+        == crate::view_state::LayoutMode::SinglePane;
+    if compact {
+        44.0
+    } else {
+        40.0
+    }
+}
+
 pub fn icon_button(
     ui: &mut egui::Ui,
     icon: IconId,
@@ -286,8 +298,9 @@ pub fn icon_button(
 ) -> egui::Response {
     ensure_image_loaders(ui.ctx());
     let color = ui.visuals().text_color();
+    let edge = target_size(ui);
     let response = ui.add_sized(
-        [38.0, 38.0],
+        [edge, edge],
         egui::Button::image(icon_image(icon, color, 17.0)),
     );
     let response = response.on_hover_text(tooltip);
