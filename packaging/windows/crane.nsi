@@ -28,6 +28,21 @@ UninstPage uninstConfirm
 UninstPage instfiles
 
 Section "Install"
+  ; Upgrade takeover: the legacy (Tauri) installer registered per-user under
+  ; the product-name key "Crane" with its program in $LOCALAPPDATA\Crane
+  ; (verified against the retained 0.1.0 installer). Run its uninstaller
+  ; silently first so an upgrade replaces that registration instead of
+  ; leaving a second entry and a stale binary. User data is not touched:
+  ; the legacy uninstaller only removes its own program files.
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Crane" "UninstallString"
+  StrCmp $0 "" legacy_takeover_done
+    ExecWait '"$LOCALAPPDATA\Crane\uninstall.exe" /S _?=$LOCALAPPDATA\Crane'
+    DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Crane"
+    Delete "$LOCALAPPDATA\Crane\crane.exe"
+    Delete "$LOCALAPPDATA\Crane\uninstall.exe"
+    RMDir "$LOCALAPPDATA\Crane"
+  legacy_takeover_done:
+
   ; Refuse to overwrite a running instance silently; user must close Crane first.
   nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq ${EXE_NAME}" /NH'
   Pop $0

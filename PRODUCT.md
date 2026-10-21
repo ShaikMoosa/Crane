@@ -8,7 +8,7 @@ adaptive
 
 ## Stack
 
-Rust + Tauri v2 with a static HTML/CSS/JavaScript frontend. The application requires no Node.js runtime or frontend bundler. Node may be used only for development-time tests.
+Pure Rust: egui/eframe native interface with wgpu rendering. No webview, JavaScript/TypeScript UI, Node.js runtime, or frontend bundler. (The Tauri v2 + static frontend implementation was retired in migration Task 10; this line records the current stack, not the historical one.)
 
 ## Users
 
@@ -39,7 +39,7 @@ The application combines a calm three-pane writing environment with transparent 
 - Complete `.crane-backup.json` backups preserve active, archived, and trashed notes with all metadata. Restore replaces the library only after validation, explicit confirmation, and an automatic pre-restore safety backup.
 - No sync, accounts, collaboration, encryption, attachments, OCR, PDF/document export, cloud destinations, or scheduled backups in the MVP.
 - No network access is required at runtime.
-- All frontend-to-native access uses narrow Tauri commands.
+- The desktop shell dispatches typed application commands only; no arbitrary filesystem or shell primitives are exposed.
 
 ## Brand Commitments
 

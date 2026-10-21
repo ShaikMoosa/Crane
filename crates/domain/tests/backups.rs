@@ -49,3 +49,52 @@ fn invalid_backup_timestamp_is_rejected() {
     let store = crane_domain::Store::seed(1);
     assert!(make_backup(&store, MAX_RENDERABLE_TIMESTAMP + 1, "0.2.0").is_err());
 }
+
+#[test]
+fn browser_preview_store_wrapped_in_envelope_is_accepted() {
+    // Synthetic value shaped like the browser preview's
+    // localStorage["crane.store.v1"] entry (see ui/bridge.mjs). No real
+    // user notes are used. The documented export wraps this store in a
+    // version-1 backup envelope; the native validator must accept it.
+    let preview_store = serde_json::json!({
+        "schemaVersion": 1,
+        "notes": [
+            {"id": "preview-active", "title": "Preview active", "body": "body",
+             "tags": ["preview"], "createdAt": 1000, "updatedAt": 2000,
+             "pinned": false, "archived": false, "trashed": false},
+            {"id": "preview-archived", "title": "Preview archived", "body": "body",
+             "tags": [], "createdAt": 1000, "updatedAt": 2000,
+             "pinned": false, "archived": true, "trashed": false},
+            {"id": "preview-trashed", "title": "Preview trashed", "body": "body",
+             "tags": [], "createdAt": 1000, "updatedAt": 2000,
+             "pinned": false, "archived": false, "trashed": true}
+        ]
+    });
+    let exported = serde_json::json!({
+        "format": "crane-backup",
+        "backupVersion": 1,
+        "createdAt": 3000,
+        "appVersion": "browser-preview",
+        "store": preview_store
+    });
+    let bytes = serde_json::to_vec(&exported).unwrap();
+    let (_, inspection) = inspect_backup(&bytes).unwrap();
+    assert_eq!(
+        (
+            inspection.created_at,
+            inspection.total,
+            inspection.active,
+            inspection.archived,
+            inspection.trashed
+        ),
+        (3000, 3, 1, 1, 1)
+    );
+}
+
+#[test]
+fn browser_preview_store_without_envelope_is_rejected() {
+    // The raw preview store is not a backup; restoring it without the
+    // documented wrapping step must fail instead of guessing.
+    let raw = br#"{"schemaVersion":1,"notes":[]}"#;
+    assert!(inspect_backup(raw).is_err());
+}

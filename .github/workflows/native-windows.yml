@@ -23,10 +23,15 @@ jobs:
         run: cargo build --workspace --all-targets --all-features --locked
       - name: Dependency layers
         run: powershell -NoProfile -File scripts/check-layers.ps1
+      - name: Native release guard
+        run: powershell -NoProfile -File scripts/check-native-release.ps1
       - name: Script self-tests
         run: |
           powershell -NoProfile -File scripts/check-layers.ps1 -SelfTest
           powershell -NoProfile -File scripts/smoke-windows.ps1 -SelfTest
+          powershell -NoProfile -File scripts/check-native-release.ps1 -SelfTest
+      # The Native release guard step above runs check-native-release.ps1
+      # against the retired tree; it must pass from Task 10 onward.
       - name: Windows package (binary; installer when NSIS present)
         run: powershell -NoProfile -File scripts/build-windows.ps1
       - uses: actions/upload-artifact@v4

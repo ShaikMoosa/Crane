@@ -4,7 +4,7 @@
 
 Read `PRODUCT.md` before product decisions and `DESIGN.md` before interface changes. Crane is a local-first Markdown notebook. The user has selected the `saas` skill as the governing stack for future development: pure Rust, egui/eframe for the native interface, and wgpu for rendering.
 
-The current released implementation is still Rust + Tauri v2 with a static `ui/` frontend. Treat those files and their tests as the migration baseline; the native migration design and implementation plan must be reviewed before replacing them. Use `tauri-vanillajs-desktop` only to inspect or maintain the legacy implementation where necessary, not to choose the target architecture.
+The native Rust implementation (0.2.0) is the released implementation. The legacy Rust + Tauri v2 shell with its static `ui/` frontend was retired in migration Task 10 after the Windows upgrade/rollback acceptance cycle; the retained 0.1.0 NSIS installer lives outside the repo build directories (`artifacts/legacy/`, with SHA-256) for rollback. The dated 2026-10-19 Tauri specs/plans are historical and superseded by the 2026-10-20 native migration design. `tauri-vanillajs-desktop` is historical context only; never reintroduce its stack.
 
 New native application code must not introduce Tauri, Electron, a webview, JavaScript/TypeScript UI code, a Node.js runtime/build dependency, remote scripts, remote fonts, or required services. Preserve the offline workflow; accounts, billing, sync, collaboration, and agent automation require separate product scope.
 
@@ -24,7 +24,7 @@ Do not require subagents or worktrees when the current harness, user request, or
 
 ## Engineering rules
 
-- During migration, keep existing DOM code in the legacy `ui/` directory. Put the new native interface in an egui/eframe desktop shell; keep domain/application contracts independent of UI, operating-system, network, identity-provider, and billing-provider dependencies.
+- The native interface lives in the egui/eframe desktop shell (`apps/desktop`); keep domain/application contracts independent of UI, operating-system, network, identity-provider, and billing-provider dependencies. Enforce this with `scripts/check-layers.ps1` and `scripts/check-native-release.ps1`.
 - Expose typed domain operations, never arbitrary filesystem or shell primitives. Validate commands, imported content, selected paths, sizes, and destructive confirmations at their boundaries.
 - Persist through a temporary sibling file followed by rename. A failed save must be visible to the UI.
 - Keep the persisted schema versioned and tolerate future unknown fields where practical.
@@ -35,7 +35,7 @@ Do not require subagents or worktrees when the current harness, user request, or
 
 ## Verification
 
-While the legacy app remains, run JavaScript tests with `node --test tests/*.test.mjs`. From `src-tauri/`, run `cargo fmt -- --check`, `cargo test --locked`, `cargo clippy --locked --all-targets --all-features -- -D warnings`, and `cargo build --locked`. Exercise the legacy frontend against its browser preview and Tauri IPC bridges when changing it.
+The legacy JavaScript tests and Tauri crate were removed with the retired shell; behavior coverage lives in the Rust suites mapped by `docs/migration/behavior-parity.md`. Browser-preview data migration is documented in `docs/migration/browser-preview-export.md`.
 
-Once the native Cargo workspace exists, also run `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and `cargo build --workspace --all-targets --all-features --locked`. Verify dependency boundaries, legacy-data compatibility, failed-save recovery, and native editor/dialog behavior. Validate installers on Windows; containers do not prove native GUI or installer behavior.
+Run `cargo fmt --all -- --check`, `cargo test --workspace --all-features --locked`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and `cargo build --workspace --all-targets --all-features --locked`. Also run `powershell -NoProfile -File scripts/check-layers.ps1`, `powershell -NoProfile -File scripts/check-native-release.ps1`, and the script `-SelfTest` modes. Verify dependency boundaries, legacy-data compatibility, failed-save recovery, and native editor/dialog behavior. Validate installers on Windows; containers do not prove native GUI or installer behavior.
 

@@ -6,7 +6,7 @@ members = [
     "crates/platform",
     "crates/storage",
 ]
-exclude = ["src-tauri"]
+# Legacy src-tauri shell retired in Task 10; native workspace only.
 resolver = "2"
 
 [workspace.package]
