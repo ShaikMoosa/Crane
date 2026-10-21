@@ -75,6 +75,7 @@ fn run() -> Result<(), String> {
                     adapter.name, adapter.backend, adapter.device_type
                 );
             }
+            egui_extras::install_image_loaders(&creation.egui_ctx);
             Ok(Box::new(CraneApp::new_with_settings(
                 library,
                 snapshot,

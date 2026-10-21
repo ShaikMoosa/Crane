@@ -18,6 +18,7 @@ crane-domain = { path = "../../crates/domain" }
 crane-platform = { path = "../../crates/platform" }
 crane-storage = { path = "../../crates/storage" }
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "system_fonts", "wgpu_no_default_features"] }
+egui_extras = { version = "=0.37.0", default-features = false, features = ["svg"] }
 
 [target.'cfg(windows)'.dependencies]
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "dx12", "wgsl"] }
