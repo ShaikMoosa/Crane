@@ -9,6 +9,7 @@ SetCompressor /SOLID lzma
 !define PRODUCT_ID "app.crane.desktop"
 !define EXE_NAME "crane.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
+!include "StrFunc.nsh"
 
 Name "${PRODUCT_NAME}"
 OutFile "..\..\artifacts\windows\Crane_${PRODUCT_VERSION}_x64-setup.exe"
@@ -44,17 +45,21 @@ Section "Install"
   legacy_takeover_done:
 
   ; Refuse to overwrite a running instance silently; user must close Crane first.
-  nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq ${EXE_NAME}" /NH'
+  running_check:
+  nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq ${EXE_NAME}" /FO CSV /NH'
   Pop $0
   Pop $1
-  StrCmp $1 "" running_check_done
-  ; tasklist prints the image name when running; require manual close.
-  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "Crane is currently running. Close it, then click OK to continue." IDOK running_check_done
+  ${StrStr} $2 $1 '"${EXE_NAME}"'
+  StrCmp $2 "" running_check_done
+  IfSilent running_check_abort
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Crane is currently running. Close it, then click Retry to continue." IDRETRY running_check
+  running_check_abort:
+  SetErrorLevel 1
   Abort
   running_check_done:
 
   SetOutPath "$INSTDIR"
-  File /oname=${EXE_NAME} "..\..\target\release\${EXE_NAME}"
+  File /oname=${EXE_NAME} "..\..\artifacts\windows\${EXE_NAME}"
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"

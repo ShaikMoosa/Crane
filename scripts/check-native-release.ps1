@@ -131,6 +131,31 @@ function Test-BuildHooks {
     return $violations.ToArray()
 }
 
+function Test-WindowsPackagingScripts {
+    param(
+        [Parameter(Mandatory = $true)][string]$BuildScriptContent,
+        [Parameter(Mandatory = $true)][string]$InstallerScriptContent
+    )
+
+    $violations = [System.Collections.Generic.List[string]]::new()
+    if ($BuildScriptContent -match "target[\\\\/]release[\\\\/]crane\.exe") {
+        $violations.Add('Windows build script hard-codes target/release/crane.exe instead of Cargo metadata target_directory')
+    }
+    if ($BuildScriptContent -notmatch '\.target_directory') {
+        $violations.Add('Windows build script does not resolve Cargo target_directory')
+    }
+    if ($InstallerScriptContent -match "target[\\\\/]release") {
+        $violations.Add('Windows installer packages an unstaged target/release binary')
+    }
+    if ($InstallerScriptContent -notmatch "artifacts[\\\\/]windows[\\\\/]\$\{EXE_NAME\}") {
+        $violations.Add('Windows installer does not package the verified staged binary')
+    }
+    if ($InstallerScriptContent -match 'StrCmp \$1 "" running_check_done') {
+        $violations.Add('Windows installer treats any tasklist output as a running Crane process')
+    }
+    return $violations.ToArray()
+}
+
 function Get-TrackedPaths {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
     $lines = & git -C $RepoRoot ls-files 2>&1
@@ -168,6 +193,10 @@ function Test-NativeRelease {
     foreach ($item in (Test-TrackedPaths -Paths $tracked)) { $violations.Add($item) }
     foreach ($item in (Test-RemoteAssets -RepoRoot $RepoRoot -Paths $tracked)) { $violations.Add($item) }
     foreach ($item in (Test-BuildHooks -RepoRoot $RepoRoot -Paths $tracked)) { $violations.Add($item) }
+
+    $buildScriptContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'scripts/build-windows.ps1') -Raw
+    $installerScriptContent = Get-Content -LiteralPath (Join-Path $RepoRoot 'packaging/windows/crane.nsi') -Raw
+    foreach ($item in (Test-WindowsPackagingScripts -BuildScriptContent $buildScriptContent -InstallerScriptContent $installerScriptContent)) { $violations.Add($item) }
 
     $metadata = Get-CargoMetadata -ManifestPath (Join-Path $RepoRoot 'Cargo.toml')
     $workspaceIds = @{}
@@ -236,6 +265,15 @@ if ($SelfTest) {
         [pscustomobject]@{ id = 'id-other'; features = @('inspection') }
     )
     Assert-Fails { throw ((Test-ResolvedFeatures -NameById $names -Nodes $nodes) -join "`n") } 'resolved egui feature set includes'
+
+    # Windows packaging must consume Cargo's actual target directory, package
+    # the verified staged binary, and distinguish tasklist's no-match text.
+    $cleanBuildScript = '$metadata.target_directory; Join-Path $targetDirectory ''release\crane.exe'''
+    $cleanInstallerScript = 'File "..\..\artifacts\windows\${EXE_NAME}"'
+    Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent $cleanInstallerScript | Out-Null
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent 'Join-Path $repoRoot ''target\release\crane.exe''' -InstallerScriptContent 'File "..\..\target\release\${EXE_NAME}"; StrCmp $1 "" running_check_done') -join "`n")
+    } 'hard-codes target/release/crane.exe'
 
     # Remote-asset and build-hook rules run against isolated fixture files.
     $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("crane-release-selftest-" + [guid]::NewGuid())

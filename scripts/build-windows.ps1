@@ -9,10 +9,16 @@ Set-Location $repoRoot
 & powershell -NoProfile -File (Join-Path $PSScriptRoot 'check-layers.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Dependency layer check failed.' }
 
+$metadataJson = & cargo metadata --format-version 1 --no-deps --locked
+if ($LASTEXITCODE -ne 0) { throw 'Could not resolve Cargo target directory.' }
+$metadata = ($metadataJson -join "`n") | ConvertFrom-Json
+$targetDirectory = [string]$metadata.target_directory
+if ([string]::IsNullOrWhiteSpace($targetDirectory)) { throw 'Cargo metadata returned an empty target directory.' }
+
 & cargo build --release --locked -p crane-desktop
 if ($LASTEXITCODE -ne 0) { throw 'Native release build failed.' }
 
-$exe = Join-Path $repoRoot 'target\release\crane.exe'
+$exe = Join-Path $targetDirectory 'release\crane.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Release binary missing: $exe" }
 if ((Get-Item -LiteralPath $exe).Length -le 0) { throw "Release binary is empty: $exe" }
 
