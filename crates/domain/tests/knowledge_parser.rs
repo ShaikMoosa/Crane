@@ -76,6 +76,13 @@ fn escaped_closing_pair_does_not_discard_the_link() {
 }
 
 #[test]
+fn malformed_link_does_not_hide_a_later_valid_link() {
+    let links = parse_wiki_links("[[Unclosed\n[[Visible]]");
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].target_title, "Visible");
+}
+
+#[test]
 fn headings_carry_levels_text_anchors_and_ranges() {
     let body =
         "# Title\n\n## On the desk\n\n## On the desk\n\n## Intro-2\n\n####### Not a heading\n";

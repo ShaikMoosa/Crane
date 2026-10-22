@@ -277,6 +277,9 @@ if ($SelfTest) {
     Assert-Fails {
         throw ((Test-WindowsPackagingScripts -BuildScriptContent 'Join-Path $repoRoot ''target\release\crane.exe''' -InstallerScriptContent 'File "..\..\target\release\${EXE_NAME}"; StrCmp $1 "" running_check_done') -join "`n")
     } 'hard-codes target/release/crane.exe'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"') -join "`n")
+    } 'uses StrStr without enabling the NSIS StrFunc macro'
 
     # Remote-asset and build-hook rules run against isolated fixture files.
     $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("crane-release-selftest-" + [guid]::NewGuid())

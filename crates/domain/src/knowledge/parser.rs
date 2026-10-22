@@ -280,7 +280,8 @@ pub fn parse_wiki_links(body: &str) -> Vec<WikiLink> {
         }
         // Closing "]]" must be on the same line and not escaped.
         let Some(close) = find_unescaped_close(body, start + 2) else {
-            break;
+            cursor = start + 2;
+            continue;
         };
         let content = &body[start + 2..close];
         if contains_unescaped(content, "[[") {
