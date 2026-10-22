@@ -1,6 +1,6 @@
 # Crane P0 Nordic Daylight UI Redesign
 
-**Status:** Approved conversational design; written specification awaiting user review
+**Status:** Approved for implementation planning
 **Date:** 2026-10-22
 **Priority:** P0, ahead of public 0.3 release publication and new product features
 
