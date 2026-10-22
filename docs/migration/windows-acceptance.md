@@ -181,9 +181,9 @@ was then verified from the external Cargo target
 `C:/Users/Admin/AppData/Local/Temp/crane-release-verification-20261022`:
 
 - staged `crane.exe`: 14,986,752 bytes, SHA-256
-  `79050BBDEE3DB4DCE66C08FD6BCED7CE391B5A5C3D56B482538C7CAEBEA0E703`;
-- `Crane_0.3.0_x64-setup.exe`: 4,335,642 bytes, SHA-256
-  `7A67BE07B168C5A9324A82F72707A42BDE85AA172CAAE1AB40C81237964593E8`;
+  `92D8253C855AEAC681969B62D2FB4F1672D4D60ABA5BD437F2B66DF71004BD1F`;
+- `Crane_0.3.0_x64-setup.exe`: 4,335,406 bytes, SHA-256
+  `B7C11DA5D1531650F69834ABADB8E2D8C61E537AE25F509EDE1BCC755A51898C`;
 - binary and installer smoke checks passed, and NSIS consumed the staged executable.
 
 These replace the earlier build hashes for packaging verification. They do not replace
