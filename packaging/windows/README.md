@@ -4,6 +4,7 @@ Standalone native packaging for Crane 0.3.0. No Tauri, WebView2 bootstrapper, or
 
 - Product: `Crane`, identifier `app.crane.desktop` (preserved from `src-tauri/tauri.conf.json`).
 - Binary: `crane.exe` (package `crane-desktop`), per-user install to `%LOCALAPPDATA%\Programs\Crane`.
+- Launch points: the interactive installer offers to launch Crane when setup completes and creates per-user Start Menu and desktop shortcuts. Silent installs create the shortcuts but do not launch the application. Uninstall removes both shortcuts.
 - Data: `%APPDATA%\app.crane.desktop` (`notes.json`, `backups/`, `settings.json`, `native-migration-v1.json`) is never deleted by install/upgrade/uninstall.
 - Upgrade: the legacy 0.1.0 (Tauri) installer registered per-user under uninstall key `Crane` with its program in `%LOCALAPPDATA%\Crane`. The native installer runs that uninstaller silently during install, then removes any leftover legacy key/program files, so an upgrade leaves exactly one registration (`app.crane.desktop`). Takeover verified in the Task 10 cycle and re-verified for 0.3.0 in `docs/migration/windows-acceptance.md`.
 - Manifest: `app.manifest` (asInvoker, PerMonitorV2 DPI, long paths). Version `0.3.0.0` must match `crane.nsi` `PRODUCT_VERSION` and `crane-desktop` version.

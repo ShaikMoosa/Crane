@@ -156,6 +156,23 @@ function Test-WindowsPackagingScripts {
     if ($InstallerScriptContent -match '\$\{StrStr\}' -and $InstallerScriptContent -notmatch '\$\{Using:StrFunc\}\s+StrStr') {
         $violations.Add('Windows installer uses StrStr without enabling the NSIS StrFunc macro')
     }
+    if ($InstallerScriptContent -notmatch 'CreateShortCut\s+"\$SMPROGRAMS[\\/]Crane[\\/]Crane\.lnk"\s+"\$INSTDIR[\\/]\$\{EXE_NAME\}"') {
+        $violations.Add('Windows installer does not create a Start Menu shortcut')
+    }
+    if ($InstallerScriptContent -notmatch 'CreateShortCut\s+"\$DESKTOP[\\/]Crane\.lnk"\s+"\$INSTDIR[\\/]\$\{EXE_NAME\}"') {
+        $violations.Add('Windows installer does not create a desktop shortcut')
+    }
+    if ($InstallerScriptContent -notmatch '!define\s+MUI_FINISHPAGE_RUN\s+"\$INSTDIR[\\/]\$\{EXE_NAME\}"' -or
+        $InstallerScriptContent -notmatch '!insertmacro\s+MUI_PAGE_FINISH') {
+        $violations.Add('Windows installer does not offer to launch Crane after interactive installation')
+    }
+    if ($InstallerScriptContent -notmatch 'Delete\s+"\$SMPROGRAMS[\\/]Crane[\\/]Crane\.lnk"' -or
+        $InstallerScriptContent -notmatch 'RMDir\s+"\$SMPROGRAMS[\\/]Crane"') {
+        $violations.Add('Windows installer does not remove the Start Menu shortcut during uninstall')
+    }
+    if ($InstallerScriptContent -notmatch 'Delete\s+"\$DESKTOP[\\/]Crane\.lnk"') {
+        $violations.Add('Windows installer does not remove the desktop shortcut during uninstall')
+    }
     return $violations.ToArray()
 }
 
@@ -272,7 +289,7 @@ if ($SelfTest) {
     # Windows packaging must consume Cargo's actual target directory, package
     # the verified staged binary, and distinguish tasklist's no-match text.
     $cleanBuildScript = '$metadata.target_directory; Join-Path $targetDirectory ''release\crane.exe'''
-    $cleanInstallerScript = '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"'
+    $cleanInstallerScript = '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"; CreateDirectory "$SMPROGRAMS\Crane"; CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"; CreateShortCut "$DESKTOP\Crane.lnk" "$INSTDIR\${EXE_NAME}"; !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"; !insertmacro MUI_PAGE_FINISH; Delete "$SMPROGRAMS\Crane\Crane.lnk"; RMDir "$SMPROGRAMS\Crane"; Delete "$DESKTOP\Crane.lnk"'
     Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent $cleanInstallerScript | Out-Null
     Assert-Fails {
         throw ((Test-WindowsPackagingScripts -BuildScriptContent 'Join-Path $repoRoot ''target\release\crane.exe''' -InstallerScriptContent 'File "..\..\target\release\${EXE_NAME}"; StrCmp $1 "" running_check_done') -join "`n")
@@ -280,6 +297,21 @@ if ($SelfTest) {
     Assert-Fails {
         throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"') -join "`n")
     } 'uses StrStr without enabling the NSIS StrFunc macro'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"') -join "`n")
+    } 'does not create a Start Menu shortcut'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"; CreateDirectory "$SMPROGRAMS\Crane"; CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"') -join "`n")
+    } 'does not create a desktop shortcut'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"; CreateDirectory "$SMPROGRAMS\Crane"; CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"; CreateShortCut "$DESKTOP\Crane.lnk" "$INSTDIR\${EXE_NAME}"') -join "`n")
+    } 'does not offer to launch Crane after interactive installation'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"; CreateDirectory "$SMPROGRAMS\Crane"; CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"; CreateShortCut "$DESKTOP\Crane.lnk" "$INSTDIR\${EXE_NAME}"; !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"; !insertmacro MUI_PAGE_FINISH') -join "`n")
+    } 'does not remove the Start Menu shortcut during uninstall'
+    Assert-Fails {
+        throw ((Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"; CreateDirectory "$SMPROGRAMS\Crane"; CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"; CreateShortCut "$DESKTOP\Crane.lnk" "$INSTDIR\${EXE_NAME}"; !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"; !insertmacro MUI_PAGE_FINISH; Delete "$SMPROGRAMS\Crane\Crane.lnk"; RMDir "$SMPROGRAMS\Crane"') -join "`n")
+    } 'does not remove the desktop shortcut during uninstall'
 
     # Remote-asset and build-hook rules run against isolated fixture files.
     $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("crane-release-selftest-" + [guid]::NewGuid())

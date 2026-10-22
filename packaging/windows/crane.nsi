@@ -9,6 +9,7 @@ SetCompressor /SOLID lzma
 !define PRODUCT_ID "app.crane.desktop"
 !define EXE_NAME "crane.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
+!include "MUI2.nsh"
 !include "StrFunc.nsh"
 ${Using:StrFunc} StrStr
 
@@ -24,10 +25,14 @@ VIAddVersionKey "FileDescription" "A calm, private Markdown notebook"
 VIAddVersionKey "FileVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey "ProductVersion" "${PRODUCT_VERSION}"
 
-Page directory
-Page instfiles
-UninstPage uninstConfirm
-UninstPage instfiles
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Crane"
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
   ; Upgrade takeover: the legacy (Tauri) installer registered per-user under
@@ -68,9 +73,18 @@ Section "Install"
   WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${EXE_NAME}"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" "$INSTDIR\uninstall.exe"
+
+  SetShellVarContext current
+  CreateDirectory "$SMPROGRAMS\Crane"
+  CreateShortCut "$SMPROGRAMS\Crane\Crane.lnk" "$INSTDIR\${EXE_NAME}"
+  CreateShortCut "$DESKTOP\Crane.lnk" "$INSTDIR\${EXE_NAME}"
 SectionEnd
 
 Section "Uninstall"
+  SetShellVarContext current
+  Delete "$DESKTOP\Crane.lnk"
+  Delete "$SMPROGRAMS\Crane\Crane.lnk"
+  RMDir "$SMPROGRAMS\Crane"
   Delete "$INSTDIR\${EXE_NAME}"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"

@@ -188,3 +188,31 @@ was then verified from the external Cargo target
 
 These replace the earlier build hashes for packaging verification. They do not replace
 the still-open physical interaction checks or constitute a signed public release.
+
+## 2026-10-22 — installer launch-point remediation
+
+The 0.3 installer previously copied and registered Crane but created no shortcut and did
+not present a post-install launch action. A successful interactive install could therefore
+appear to do nothing. The installer now creates per-user Start Menu and desktop shortcuts,
+offers `Launch Crane` on the interactive finish page, skips launch during silent installs,
+and removes both shortcuts during uninstall.
+
+Verification on Windows used the production `%LOCALAPPDATA%\Programs\Crane` location and
+the real per-user shell folders:
+
+- the updated locked release and NSIS installer build exited 0;
+- silent install exited 0, created both shortcuts, and launched no Crane process;
+- both shortcuts resolved to the installed `crane.exe`, whose SHA-256 matched the staged
+  binary;
+- launching the desktop shortcut produced a responsive window titled `Crane`;
+- silent uninstall removed the registration, program directory, both shortcuts, and the
+  now-empty Start Menu directory;
+- immediate reinstall restored the binary, registration, and both shortcuts; and
+- production `notes.json` remained byte-identical throughout (SHA-256
+  `64FDA31B409537A9E5EB8F35882AE6244EA524B3A460DCB142599D3A86859BC7`).
+
+The rebuilt artifacts are 14,987,264-byte `crane.exe` with SHA-256
+`0D0C6821ED730ECD7678922AF174599D3104314A9D91493423620A3306338FC0` and
+4,372,070-byte `Crane_0.3.0_x64-setup.exe` with SHA-256
+`DD5E8751DB8C64BB79FE6120345E7684F025ACB1C064A75008E9057515D3830B`.
+They remain unsigned, and the previously open physical interaction checks remain open.

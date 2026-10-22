@@ -39,7 +39,7 @@ cargo run -p crane-desktop -- --preview-data-dir artifacts/test-data/dev-preview
 powershell -NoProfile -File scripts/build-windows.ps1
 ```
 
-This runs the dependency-layer check, builds the locked release `crane.exe`, verifies it with `scripts/smoke-windows.ps1`, and — when NSIS (`makensis`) is available — produces `artifacts/windows/Crane_0.3.0_x64-setup.exe` with SHA-256 and build provenance. The installer is per-user, preserves `%APPDATA%\app.crane.desktop` data on install/upgrade/uninstall, and replaces a legacy 0.1.0 installation's registration. It is unsigned unless signing credentials are supplied.
+This runs the dependency-layer check, builds the locked release `crane.exe`, verifies it with `scripts/smoke-windows.ps1`, and — when NSIS (`makensis`) is available — produces `artifacts/windows/Crane_0.3.0_x64-setup.exe` with SHA-256 and build provenance. The installer is per-user, creates Start Menu and desktop shortcuts, offers to launch Crane after interactive setup, preserves `%APPDATA%\app.crane.desktop` data on install/upgrade/uninstall, and replaces a legacy 0.1.0 installation's registration. It is unsigned unless signing credentials are supplied.
 
 ## Move and protect your notes
 
