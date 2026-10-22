@@ -7,8 +7,8 @@ pub use index::{
     context_excerpt, HeadingResolution, InboundLink, KnowledgeIndex, NoteVisibility, Resolution,
 };
 pub use parser::{
-    normalize_heading_anchor, normalize_title, parse_headings, parse_wiki_links, HeadingFact,
-    HeadingTarget, WikiLink,
+    is_markdown_code_at, normalize_heading_anchor, normalize_title, parse_headings,
+    parse_wiki_links, HeadingFact, HeadingTarget, WikiLink,
 };
 pub use statistics::{note_statistics, NoteStatistics};
 pub use tags::{build_tag_tree, tag_in_subtree, TagNode};

@@ -74,10 +74,8 @@ fn line_infos(body: &str) -> Vec<LineInfo> {
         let mut is_code = false;
         if let Some((fence_char, fence_len)) = fence {
             is_code = true;
-            if let Some(run) = leading_run(trimmed, fence_char) {
-                if run >= fence_len && leading <= 3 {
-                    fence = None;
-                }
+            if fence_closes(trimmed, leading, fence_char, fence_len) {
+                fence = None;
             }
         } else if let Some((fence_char, run)) = fence_start(trimmed, leading) {
             fence = Some((fence_char, run));
@@ -92,6 +90,19 @@ fn line_infos(body: &str) -> Vec<LineInfo> {
         let _ = content;
     }
     infos
+}
+
+fn fence_closes(trimmed: &str, leading: usize, fence_char: char, fence_len: usize) -> bool {
+    if leading > 3 {
+        return false;
+    }
+    let Some(run) = leading_run(trimmed, fence_char) else {
+        return false;
+    };
+    if run < fence_len {
+        return false;
+    }
+    trimmed[run..].trim_matches([' ', '\t']).is_empty()
 }
 
 fn leading_run(text: &str, ch: char) -> Option<usize> {
@@ -111,9 +122,9 @@ fn fence_start(trimmed: &str, leading: usize) -> Option<(char, usize)> {
     (run >= 3).then_some((first, run))
 }
 
-fn inline_code_ranges(line: &str, line_start: usize) -> Vec<Range<usize>> {
+fn inline_code_ranges(text: &str, text_start: usize, include_unclosed: bool) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
-    let bytes = line.as_bytes();
+    let bytes = text.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
         if bytes[i] == b'`' {
@@ -135,10 +146,15 @@ fn inline_code_ranges(line: &str, line_start: usize) -> Vec<Range<usize>> {
             }
             match closed {
                 Some(end) => {
-                    ranges.push(line_start + i..line_start + end);
+                    ranges.push(text_start + i..text_start + end);
                     i = end;
                 }
-                None => break,
+                None => {
+                    if include_unclosed {
+                        ranges.push(text_start + i..text_start + text.len());
+                    }
+                    break;
+                }
             }
         } else {
             i += 1;
@@ -147,22 +163,46 @@ fn inline_code_ranges(line: &str, line_start: usize) -> Vec<Range<usize>> {
     ranges
 }
 
-fn code_ranges(body: &str) -> Vec<Range<usize>> {
+fn code_ranges(body: &str, include_unclosed_inline: bool) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
+    let mut inline_start = None;
     for info in line_infos(body) {
         if info.is_code {
+            if let Some(start) = inline_start.take() {
+                ranges.extend(inline_code_ranges(
+                    &body[start..info.range.start],
+                    start,
+                    include_unclosed_inline,
+                ));
+            }
             ranges.push(info.range);
-        } else {
-            let line = &body[info.range.clone()];
-            let content = line.trim_end_matches(['\r', '\n']);
-            ranges.extend(inline_code_ranges(content, info.range.start));
+        } else if inline_start.is_none() {
+            inline_start = Some(info.range.start);
         }
+    }
+    if let Some(start) = inline_start {
+        ranges.extend(inline_code_ranges(
+            &body[start..],
+            start,
+            include_unclosed_inline,
+        ));
     }
     ranges
 }
 
 fn in_ranges(ranges: &[Range<usize>], pos: usize) -> bool {
     ranges.iter().any(|r| pos >= r.start && pos < r.end)
+}
+
+/// Whether `position` is inside fenced, indented, or inline Markdown code.
+///
+/// An unmatched backtick run is treated as active through the end of `body`.
+/// This makes the result useful while an editor buffer is still being typed.
+pub fn is_markdown_code_at(body: &str, position: usize) -> bool {
+    if position > body.len() || !body.is_char_boundary(position) {
+        return false;
+    }
+    in_ranges(&code_ranges(body, true), position)
 }
 
 fn is_escaped(body: &str, pos: usize) -> bool {
@@ -229,8 +269,7 @@ fn split_content(content: &str) -> (String, Option<String>, Option<String>) {
 }
 
 pub fn parse_wiki_links(body: &str) -> Vec<WikiLink> {
-    let code = code_ranges(body);
-    let bytes = body.as_bytes();
+    let code = code_ranges(body, false);
     let mut links = Vec::new();
     let mut cursor = 0usize;
     while let Some(found) = body[cursor..].find("[[") {
@@ -240,21 +279,15 @@ pub fn parse_wiki_links(body: &str) -> Vec<WikiLink> {
             continue;
         }
         // Closing "]]" must be on the same line and not escaped.
-        let Some(close_rel) = body[start + 2..].find("]]") else {
+        let Some(close) = find_unescaped_close(body, start + 2) else {
             break;
         };
-        let close = start + 2 + close_rel;
         let content = &body[start + 2..close];
-        if content.contains(['\n', '\r']) || is_escaped(body, close) {
-            cursor = start + 2;
-            continue;
-        }
         if contains_unescaped(content, "[[") {
             // Nested opener: the whole construct is ordinary text.
             cursor = close + 2;
             continue;
         }
-        let _ = bytes;
         let (title_raw, heading_raw, alias_raw) = split_content(content);
         let target_title = unescape(title_raw.trim());
         if target_title.is_empty() {
@@ -289,6 +322,22 @@ pub fn parse_wiki_links(body: &str) -> Vec<WikiLink> {
         cursor = close + 2;
     }
     links
+}
+
+fn find_unescaped_close(body: &str, start: usize) -> Option<usize> {
+    let line_end = body[start..]
+        .find(['\n', '\r'])
+        .map_or(body.len(), |relative| start + relative);
+    let mut cursor = start;
+    while cursor < line_end {
+        let found = body[cursor..line_end].find("]]")?;
+        let close = cursor + found;
+        if !is_escaped(body, close) {
+            return Some(close);
+        }
+        cursor = close + 1;
+    }
+    None
 }
 
 fn contains_unescaped(text: &str, needle: &str) -> bool {

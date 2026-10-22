@@ -61,6 +61,21 @@ fn code_spans_and_fences_hide_links() {
 }
 
 #[test]
+fn multiline_code_spans_and_long_fences_hide_links() {
+    let body = "`code starts\n[[Multiline]]\ncode ends`\n\n````\n[[Fenced]]\n```\n[[Still fenced]]\n````\n\n[[Visible]]";
+    let links = parse_wiki_links(body);
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].target_title, "Visible");
+}
+
+#[test]
+fn escaped_closing_pair_does_not_discard_the_link() {
+    let links = parse_wiki_links(r"[[A\]] B]]");
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].target_title, "A]] B");
+}
+
+#[test]
 fn headings_carry_levels_text_anchors_and_ranges() {
     let body =
         "# Title\n\n## On the desk\n\n## On the desk\n\n## Intro-2\n\n####### Not a heading\n";

@@ -1,5 +1,5 @@
 use crane_application::knowledge::{AmbiguousCandidate, CompletionCandidate, Query};
-use crane_domain::knowledge::HeadingResolution;
+use crane_domain::knowledge::{is_markdown_code_at, HeadingResolution};
 use std::ops::Range;
 
 /// An unclosed `[[wiki-link` fragment under the caret.
@@ -34,17 +34,7 @@ pub fn wiki_fragment_at(body: &str, caret_byte: usize) -> Option<WikiFragment> {
     if backslashes % 2 == 1 {
         return None;
     }
-    let mut in_fence = false;
-    for line in before.split('\n') {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-        }
-    }
-    if in_fence {
-        return None;
-    }
-    let caret_line = before.rsplit('\n').next().unwrap_or(before);
-    if caret_line.matches('`').count() % 2 == 1 {
+    if is_markdown_code_at(before, open) {
         return None;
     }
     Some(WikiFragment {
@@ -292,6 +282,9 @@ mod tests {
         assert!(wiki_fragment_at("See \\\\[[Fie", 11).is_some());
         assert!(wiki_fragment_at("```\n[[Fie", 9).is_none());
         assert!(wiki_fragment_at("```\ncode\n```\n[[Fie", 18).is_some());
+        assert!(wiki_fragment_at("~~~~\n[[Fie", 10).is_none());
+        assert!(wiki_fragment_at("````\n```\n[[Fie", 14).is_none());
+        assert!(wiki_fragment_at("`code\n[[Fie", 11).is_none());
         assert!(wiki_fragment_at("a `[[Fie", 8).is_none());
         assert!(wiki_fragment_at("`x` [[Fie", 9).is_some());
         assert!(wiki_fragment_at("[[one\n[[two", 11).is_some());
