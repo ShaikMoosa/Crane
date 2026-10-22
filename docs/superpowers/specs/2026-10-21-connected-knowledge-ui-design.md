@@ -1,6 +1,6 @@
 # Crane 0.3 connected knowledge and native interface design
 
-Status: Conversational design approved by the user on 2026-10-21. Written-spec review is pending. Implementation planning and implementation remain gated on later user approval.
+Status: Approved by the user on 2026-10-21 and implemented on 2026-10-22. Automated verification and the installer upgrade/rollback cycle are recorded; the physical Windows interaction checks in `docs/migration/windows-acceptance.md` remain open before a release-readiness claim.
 
 ## Intent and success
 
@@ -304,4 +304,4 @@ Crane 0.3 is acceptable when:
 
 ## Review state
 
-The conversational design, including the native interface direction, derived knowledge architecture, failure behavior, verification strategy, and Lucide use, was approved on 2026-10-21. This written specification has been checked for placeholders, internal contradictions, ambiguous resolution rules, and accidental scope expansion. The next gate is explicit user review of this file. Only after approval may `superpowers:writing-plans` create the detailed implementation plan.
+The conversational and written design, including the native interface direction, derived knowledge architecture, failure behavior, verification strategy, and Lucide use, was approved on 2026-10-21. The implementation plan was executed on 2026-10-22. Post-implementation review found and corrected release-artifact staging, running-process detection, stale asynchronous navigation results, Markdown code-context edge cases, and daylight-saving local-day bounds. Release readiness still requires the unchecked physical Windows interaction rows in `docs/migration/windows-acceptance.md`.

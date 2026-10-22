@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Execution status (2026-10-22):** Tasks 1–14 are implemented. Task 15's compatibility suite, large-library diagnostics, automated repository gates, and installer upgrade/rollback cycle are complete. Physical DPI, live IME, clipboard, extended undo/redo, Narrator, and full keyboard-only acceptance remain open and are tracked in `docs/migration/windows-acceptance.md`; Crane 0.3 is not yet claimed release-ready.
+
+The unchecked boxes below preserve the original implementation recipe and expected RED/GREEN sequence; they are not the current status ledger. The authoritative completion record is the repository history, automated suites, and Windows acceptance document.
+
 **Goal:** Add a memory-only derived knowledge layer and calmer native navigation to Crane — wiki links, backlinks, Quick Open, hierarchical tags, inspector, and formatting — without changing schema version 1 or any persisted library/backup byte.
 
 **Architecture:** Pure domain parsing in `crates/domain/src/knowledge/` turns each committed `Note` into `NoteFacts`; `KnowledgeIndex` in the same crate owns cross-note resolution. `crane-application` owns the index inside `Library`, updates it on the serialized worker only after atomic commit succeeds, and answers typed `Query` values with revision-stamped read models. `crane-desktop` renders those read models through focused controllers (`sidebar`, `quick_open`, `knowledge_navigation`, `inspector`, `formatting`, `icons`) coordinated by `app.rs`; drafts stay desktop-owned and never publish backlinks.

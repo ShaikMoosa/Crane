@@ -160,3 +160,21 @@ Still requiring a human operator on physical Windows (unchanged harness limits):
   single-step undo and Tab order as partial evidence).
 - Fresh-socket offline run is trivially satisfied (Crane opens no sockets; the native
   release check forbids the web stack).
+
+## 2026-10-22 — post-review release-script remediation
+
+The 0.3 validation above accurately records that its fresh Cargo target executable was
+manually copied into the default `target/release/` directory before NSIS ran. Review
+identified that workaround as a reproducibility defect, not an acceptable release
+procedure. The release scripts now:
+
+- resolve Cargo's actual `target_directory` from `cargo metadata`, including an external
+  `CARGO_TARGET_DIR`;
+- stage and checksum that exact executable under `artifacts/windows/crane.exe`;
+- make NSIS package the verified staged executable rather than a default-target path; and
+- detect a running `crane.exe` by an exact CSV image-name match, so localized `tasklist`
+  no-match text cannot block a normal or silent install.
+
+`check-native-release.ps1` and its self-test enforce those properties. A fresh installer
+build is still required before publishing replacement hashes; the hashes in the earlier
+validation section remain evidence for that historical build only.
