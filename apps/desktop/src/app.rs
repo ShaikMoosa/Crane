@@ -22,7 +22,7 @@ use crane_domain::knowledge::{parse_draft_facts, HeadingResolution, NoteFacts, T
 use crane_domain::{parse_preview, MarkdownDocument, Note, Store};
 use crane_storage::{NativeSettings, ThemeChoice};
 use eframe::egui;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -50,6 +50,68 @@ enum PendingQuery {
     CompleteWikiLink(u64),
     ResolveWikiLink(u64),
     KnowledgeFor { note_id: String, revision: u64 },
+}
+
+fn same_interactive_query_lane(left: &PendingQuery, right: &PendingQuery) -> bool {
+    matches!(
+        (left, right),
+        (PendingQuery::QuickOpen(_), PendingQuery::QuickOpen(_))
+            | (
+                PendingQuery::CompleteWikiLink(_),
+                PendingQuery::CompleteWikiLink(_)
+            )
+            | (
+                PendingQuery::ResolveWikiLink(_),
+                PendingQuery::ResolveWikiLink(_)
+            )
+    )
+}
+
+fn enqueue_deferred_query(
+    queue: &mut VecDeque<WorkerRequest>,
+    pending: &mut HashMap<u64, PendingQuery>,
+    request: WorkerRequest,
+    pending_query: PendingQuery,
+) {
+    let superseded: Vec<u64> = queue
+        .iter()
+        .filter_map(|queued| {
+            pending
+                .get(&queued.request_id)
+                .filter(|queued_pending| {
+                    same_interactive_query_lane(queued_pending, &pending_query)
+                })
+                .map(|_| queued.request_id)
+        })
+        .collect();
+    if !superseded.is_empty() {
+        queue.retain(|queued| !superseded.contains(&queued.request_id));
+        for request_id in superseded {
+            pending.remove(&request_id);
+        }
+    }
+    pending.insert(request.request_id, pending_query);
+    queue.push_back(request);
+}
+
+fn flush_deferred_queries(
+    queue: &mut VecDeque<WorkerRequest>,
+    try_send: &mut dyn FnMut(WorkerRequest) -> Result<(), AppError>,
+) -> Vec<(u64, AppError)> {
+    let mut failures = Vec::new();
+    while let Some(request) = queue.front().cloned() {
+        match try_send(request.clone()) {
+            Ok(()) => {
+                queue.pop_front();
+            }
+            Err(error) if error.code == ErrorCode::QueueFull => break,
+            Err(error) => {
+                queue.pop_front();
+                failures.push((request.request_id, error));
+            }
+        }
+    }
+    failures
 }
 
 #[derive(Default)]
@@ -125,6 +187,7 @@ pub struct CraneApp {
     data_menu_open: bool,
     request_restore_cancel_focus: bool,
     pending_queries: HashMap<u64, PendingQuery>,
+    deferred_queries: VecDeque<WorkerRequest>,
     sidebar_state: SidebarState,
     tag_tree: Vec<TagNode>,
     tag_tree_revision: Option<u64>,
@@ -231,6 +294,7 @@ impl CraneApp {
             data_menu_open: false,
             request_restore_cancel_focus: false,
             pending_queries: HashMap::new(),
+            deferred_queries: VecDeque::new(),
             sidebar_state: SidebarState::default(),
             tag_tree: Vec::new(),
             tag_tree_revision: None,
@@ -444,16 +508,24 @@ impl CraneApp {
     fn send_query(&mut self, query: Query, pending: PendingQuery) -> u64 {
         let request_id = self.next_request_id;
         self.next_request_id = self.next_request_id.saturating_add(1);
-        match self
-            .worker
-            .try_send(WorkerRequest::query(request_id, query))
-        {
-            Ok(()) => {
-                self.pending_queries.insert(request_id, pending);
-            }
-            Err(error) => self.view.status = Some(error.message),
-        }
+        enqueue_deferred_query(
+            &mut self.deferred_queries,
+            &mut self.pending_queries,
+            WorkerRequest::query(request_id, query),
+            pending,
+        );
+        self.dispatch_ready_queries();
         request_id
+    }
+
+    fn dispatch_ready_queries(&mut self) {
+        let failures = flush_deferred_queries(&mut self.deferred_queries, &mut |request| {
+            self.worker.try_send(request)
+        });
+        for (request_id, error) in failures {
+            self.pending_queries.remove(&request_id);
+            self.view.status = Some(error.message);
+        }
     }
 
     fn ensure_sidebar_queries(&mut self) {
@@ -1320,6 +1392,7 @@ impl CraneApp {
                 self.accept_worker_result(result);
             }
         }
+        self.dispatch_ready_queries();
         if let Some(draft) = &self.draft {
             let current_id = draft.current().note_id.clone();
             if self.view.selected_id.as_deref() != Some(current_id.as_str())
@@ -1606,5 +1679,64 @@ fn draft_from_note(note: &Note) -> Draft {
         body: note.body.clone(),
         revision: 0,
         acknowledged_revision: 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+
+    fn quick_open_request(request_id: u64, query: &str) -> WorkerRequest {
+        WorkerRequest::query(
+            request_id,
+            Query::QuickOpen {
+                query: query.to_owned(),
+                include_archived: false,
+            },
+        )
+    }
+
+    #[test]
+    fn deferred_interactive_queries_keep_only_the_latest_request() {
+        let mut queue = VecDeque::new();
+        let mut pending = HashMap::new();
+
+        enqueue_deferred_query(
+            &mut queue,
+            &mut pending,
+            quick_open_request(1, "old"),
+            PendingQuery::QuickOpen(1),
+        );
+        enqueue_deferred_query(
+            &mut queue,
+            &mut pending,
+            quick_open_request(2, "new"),
+            PendingQuery::QuickOpen(2),
+        );
+
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue.front().map(|request| request.request_id), Some(2));
+        assert!(!pending.contains_key(&1));
+        assert!(pending.contains_key(&2));
+    }
+
+    #[test]
+    fn queue_full_keeps_query_for_a_later_retry() {
+        let mut queue = VecDeque::from([quick_open_request(7, "later")]);
+        let mut attempts = 0;
+
+        let failures = flush_deferred_queries(&mut queue, &mut |_request| {
+            attempts += 1;
+            Err(AppError::new(ErrorCode::QueueFull, "full"))
+        });
+
+        assert_eq!(attempts, 1);
+        assert!(failures.is_empty());
+        assert_eq!(queue.front().map(|request| request.request_id), Some(7));
+
+        let failures = flush_deferred_queries(&mut queue, &mut |_request| Ok(()));
+        assert!(failures.is_empty());
+        assert!(queue.is_empty());
     }
 }

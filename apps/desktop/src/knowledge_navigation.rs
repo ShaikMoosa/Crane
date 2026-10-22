@@ -130,13 +130,14 @@ impl CompletionState {
             self.dismissed = None;
         }
         self.fragment = fragment;
+        self.candidates.clear();
         self.active = 0;
         let mut send = None;
         match &self.fragment {
             Some(found) if !self.is_dismissed(&found.raw) => {
                 send = Some(found.raw.clone());
             }
-            _ => self.candidates.clear(),
+            _ => {}
         }
         if let Some(raw) = send {
             self.sequence = self.sequence.saturating_add(1);
@@ -337,5 +338,23 @@ mod tests {
         assert!(!state.is_dismissed("Fiel"));
         state.clear();
         assert!(!state.is_dismissed("Fie"));
+    }
+
+    #[test]
+    fn changed_fragment_clears_stale_candidates_before_new_results_arrive() {
+        let mut state = CompletionState {
+            fragment: wiki_fragment_at("[[Old", 5),
+            candidates: vec![title("old", "Old")],
+            ..CompletionState::default()
+        };
+        let mut emitted = Vec::new();
+
+        state.set_fragment(wiki_fragment_at("[[New", 5), &mut |query| {
+            emitted.push(query)
+        });
+
+        assert!(state.candidates.is_empty());
+        assert_eq!(state.active, 0);
+        assert_eq!(emitted.len(), 1);
     }
 }

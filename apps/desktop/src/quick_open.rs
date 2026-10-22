@@ -41,6 +41,7 @@ pub fn close(state: &mut QuickOpenState) {
 
 fn request(state: &mut QuickOpenState, on_query: &mut dyn FnMut(Query)) {
     state.sequence = state.sequence.saturating_add(1);
+    state.hits.clear();
     state.active = 0;
     on_query(Query::QuickOpen {
         query: state.query.clone(),
@@ -134,4 +135,36 @@ pub fn show(
         close(state);
     }
     intent
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hit(id: &str) -> QuickOpenHit {
+        QuickOpenHit {
+            note_id: id.to_owned(),
+            title: id.to_owned(),
+            excerpt: String::new(),
+            updated_at: 0,
+            pinned: false,
+            archived: false,
+        }
+    }
+
+    #[test]
+    fn requesting_new_results_clears_stale_hits_before_enter_can_accept_them() {
+        let mut state = QuickOpenState {
+            query: "new query".into(),
+            hits: vec![hit("stale")],
+            ..QuickOpenState::default()
+        };
+        let mut emitted = Vec::new();
+
+        request(&mut state, &mut |query| emitted.push(query));
+
+        assert!(state.hits.is_empty());
+        assert_eq!(state.active, 0);
+        assert_eq!(emitted.len(), 1);
+    }
 }
