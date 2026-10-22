@@ -6,6 +6,7 @@ pub mod formatting;
 pub mod icons;
 pub mod inspector;
 pub mod knowledge_navigation;
+mod query_dispatch;
 pub mod quick_open;
 pub mod settings;
 pub mod sidebar;
