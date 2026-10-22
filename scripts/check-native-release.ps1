@@ -153,6 +153,9 @@ function Test-WindowsPackagingScripts {
     if ($InstallerScriptContent -match 'StrCmp \$1 "" running_check_done') {
         $violations.Add('Windows installer treats any tasklist output as a running Crane process')
     }
+    if ($InstallerScriptContent -match '\$\{StrStr\}' -and $InstallerScriptContent -notmatch '\$\{Using:StrFunc\}\s+StrStr') {
+        $violations.Add('Windows installer uses StrStr without enabling the NSIS StrFunc macro')
+    }
     return $violations.ToArray()
 }
 
@@ -269,7 +272,7 @@ if ($SelfTest) {
     # Windows packaging must consume Cargo's actual target directory, package
     # the verified staged binary, and distinguish tasklist's no-match text.
     $cleanBuildScript = '$metadata.target_directory; Join-Path $targetDirectory ''release\crane.exe'''
-    $cleanInstallerScript = 'File "..\..\artifacts\windows\${EXE_NAME}"'
+    $cleanInstallerScript = '${Using:StrFunc} StrStr; ${StrStr} $2 $1 ''"crane.exe"''; File "..\..\artifacts\windows\${EXE_NAME}"'
     Test-WindowsPackagingScripts -BuildScriptContent $cleanBuildScript -InstallerScriptContent $cleanInstallerScript | Out-Null
     Assert-Fails {
         throw ((Test-WindowsPackagingScripts -BuildScriptContent 'Join-Path $repoRoot ''target\release\crane.exe''' -InstallerScriptContent 'File "..\..\target\release\${EXE_NAME}"; StrCmp $1 "" running_check_done') -join "`n")

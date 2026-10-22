@@ -175,6 +175,16 @@ procedure. The release scripts now:
 - detect a running `crane.exe` by an exact CSV image-name match, so localized `tasklist`
   no-match text cannot block a normal or silent install.
 
-`check-native-release.ps1` and its self-test enforce those properties. A fresh installer
-build is still required before publishing replacement hashes; the hashes in the earlier
-validation section remain evidence for that historical build only.
+`check-native-release.ps1` and its self-test enforce those properties, including the
+required NSIS `StrFunc` declaration for exact process-name matching. The corrected path
+was then verified from the external Cargo target
+`C:/Users/Admin/AppData/Local/Temp/crane-release-verification-20261022`:
+
+- staged `crane.exe`: 14,986,752 bytes, SHA-256
+  `79050BBDEE3DB4DCE66C08FD6BCED7CE391B5A5C3D56B482538C7CAEBEA0E703`;
+- `Crane_0.3.0_x64-setup.exe`: 4,335,642 bytes, SHA-256
+  `7A67BE07B168C5A9324A82F72707A42BDE85AA172CAAE1AB40C81237964593E8`;
+- binary and installer smoke checks passed, and NSIS consumed the staged executable.
+
+These replace the earlier build hashes for packaging verification. They do not replace
+the still-open physical interaction checks or constitute a signed public release.

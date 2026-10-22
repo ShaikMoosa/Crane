@@ -10,6 +10,7 @@ SetCompressor /SOLID lzma
 !define EXE_NAME "crane.exe"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_ID}"
 !include "StrFunc.nsh"
+${Using:StrFunc} StrStr
 
 Name "${PRODUCT_NAME}"
 OutFile "..\..\artifacts\windows\Crane_${PRODUCT_VERSION}_x64-setup.exe"
