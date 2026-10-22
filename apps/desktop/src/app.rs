@@ -10,7 +10,11 @@ use crate::settings::SettingsController;
 use crate::sidebar::{SidebarIntent, SidebarState, SidebarView};
 use crate::theme;
 use crate::transfers::{TransferController, TransferEffect, TransferState};
-use crate::view_state::{layout_mode, LayoutMode, ViewState};
+use crate::view_state::{
+    editor_measure, inspector_presentation, layout_mode, InspectorPresentation, LayoutMode,
+    ViewState, COLLAPSED_NOTE_LIST_WIDTH, COLLAPSED_RAIL_WIDTH, INSPECTOR_WIDTH, NOTE_LIST_WIDTH,
+    RAIL_WIDTH,
+};
 use crate::views::{editor, library, note_list, restore};
 use crate::worker::{spawn_worker, WorkerHandle, WorkerOutcome, WorkerRequest, WorkerResult};
 use crane_application::knowledge::{
@@ -257,7 +261,9 @@ impl CraneApp {
 
         let request_data_focus = self.transfers.take_data_focus_request();
 
-        let mode = layout_mode(ui.available_width());
+        // Breakpoints describe the window viewport, not the central panel after
+        // egui has subtracted its default inner margin.
+        let mode = layout_mode(ui.ctx().viewport_rect().width());
         if self.view.focus_mode {
             theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
             self.show_editor(ui);
@@ -286,9 +292,9 @@ impl CraneApp {
             let pane_height = ui.available_height();
             ui.horizontal(|ui| {
                 let rail_width = if mode == LayoutMode::Wide {
-                    theme::RAIL_WIDTH
+                    RAIL_WIDTH
                 } else {
-                    theme::COLLAPSED_RAIL_WIDTH
+                    COLLAPSED_RAIL_WIDTH
                 };
                 ui.allocate_ui_with_layout(
                     egui::vec2(rail_width, pane_height),
@@ -304,9 +310,9 @@ impl CraneApp {
                 );
                 ui.separator();
                 let list_width = if mode == LayoutMode::Wide {
-                    theme::NOTE_LIST_WIDTH
+                    NOTE_LIST_WIDTH
                 } else {
-                    theme::COLLAPSED_NOTE_LIST_WIDTH
+                    COLLAPSED_NOTE_LIST_WIDTH
                 };
                 ui.allocate_ui_with_layout(
                     egui::vec2(list_width, pane_height),
@@ -767,37 +773,55 @@ impl CraneApp {
 
     fn show_editor(&mut self, ui: &mut egui::Ui) {
         let has_selection = self.view.selected_id.is_some();
-        let docked = has_selection && self.inspector.open && ui.available_width() >= 760.0;
+        let docked = has_selection
+            && self.inspector.open
+            && inspector_presentation(ui.available_width()) == InspectorPresentation::Docked;
         self.inspector_floating = has_selection && self.inspector.open && !docked;
         let inspector_was_open = self.inspector.open;
         if docked {
             ui.horizontal(|ui| {
-                let main_width = (ui.available_width() - 320.0).max(200.0);
+                let main_width = (ui.available_width() - INSPECTOR_WIDTH).max(0.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(main_width, ui.available_height()),
                     egui::Layout::top_down(egui::Align::Min),
-                    |ui| self.show_editor_main(ui),
+                    |ui| self.show_editor_centered(ui),
                 );
                 ui.separator();
                 ui.allocate_ui_with_layout(
-                    egui::vec2(320.0, ui.available_height()),
+                    egui::vec2(INSPECTOR_WIDTH, ui.available_height()),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| self.show_inspector(ui),
                 );
             });
         } else {
-            self.show_editor_main(ui);
+            self.show_editor_centered(ui);
             if self.inspector_floating {
                 egui::Window::new("Inspector")
                     .id(egui::Id::unique("inspector-float"))
                     .anchor(egui::Align2::RIGHT_TOP, [-16.0, 16.0])
-                    .default_size([320.0, 480.0])
+                    .default_size([INSPECTOR_WIDTH, 480.0])
                     .show(ui.ctx(), |ui| self.show_inspector(ui));
             }
         }
         if inspector_was_open && !self.inspector.open {
             self.request_body_focus = true;
         }
+    }
+
+    fn show_editor_centered(&mut self, ui: &mut egui::Ui) {
+        let available = ui.available_size();
+        let measure = editor_measure(available.x);
+        ui.allocate_ui_with_layout(
+            available,
+            egui::Layout::top_down(egui::Align::Center),
+            |ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(measure, available.y),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| self.show_editor_main(ui),
+                );
+            },
+        );
     }
 
     fn show_editor_main(&mut self, ui: &mut egui::Ui) {

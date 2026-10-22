@@ -5,10 +5,6 @@ use eframe::egui::{
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-pub const RAIL_WIDTH: f32 = 236.0;
-pub const COLLAPSED_RAIL_WIDTH: f32 = 72.0;
-pub const NOTE_LIST_WIDTH: f32 = 330.0;
-pub const COLLAPSED_NOTE_LIST_WIDTH: f32 = 290.0;
 const INTERFACE_FAMILY: &str = "Crane Interface";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

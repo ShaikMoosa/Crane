@@ -1,7 +1,10 @@
 mod common;
 
 use common::{app, note};
-use crane_desktop::view_state::{layout_mode, LayoutMode};
+use crane_desktop::view_state::{
+    editor_measure, layout_mode, LayoutMode, COLLAPSED_NOTE_LIST_WIDTH, COLLAPSED_RAIL_WIDTH,
+    EDITOR_MEASURE_MAX,
+};
 use eframe::egui::accesskit::Role;
 use egui_kittest::{kittest::Queryable, Harness};
 use std::time::{Duration, Instant};
@@ -89,10 +92,23 @@ fn create_note_focuses_title_and_layout_breakpoints_are_exact() {
     harness.run();
     assert!(harness.get_by_label("Note title").is_focused());
 
-    assert_eq!(layout_mode(901.0), LayoutMode::Wide);
-    assert_eq!(layout_mode(900.0), LayoutMode::CollapsedRail);
-    assert_eq!(layout_mode(681.0), LayoutMode::CollapsedRail);
-    assert_eq!(layout_mode(680.0), LayoutMode::SinglePane);
+    assert_eq!(layout_mode(1200.0), LayoutMode::Wide);
+    assert_eq!(layout_mode(1199.0), LayoutMode::CollapsedRail);
+    assert_eq!(layout_mode(720.0), LayoutMode::CollapsedRail);
+    assert_eq!(layout_mode(719.0), LayoutMode::SinglePane);
+    assert_eq!(editor_measure(900.0), EDITOR_MEASURE_MAX);
+    assert_eq!(editor_measure(640.0), 608.0);
+}
+
+#[test]
+fn exact_720_point_viewport_uses_collapsed_shell() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let harness = Harness::builder()
+        .with_size([720.0, 560.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness.get_by_label("New note");
+    assert!(harness.query_by_label("Back to notes").is_none());
 }
 
 #[test]
@@ -118,7 +134,7 @@ fn query_cache_only_recomputes_for_relevant_changes() {
 }
 
 #[test]
-fn sub_680_layout_has_explicit_editor_list_and_library_navigation() {
+fn sub_720_layout_has_explicit_editor_list_and_library_navigation() {
     let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
     let mut harness = Harness::builder()
         .with_size([640.0, 780.0])
@@ -273,7 +289,7 @@ fn escape_after_overlays_close_exits_focus_mode() {
     harness.get_by_label("Notes");
 }
 
-fn editor_body_x(width: f32) -> f32 {
+fn editor_body_rect(width: f32) -> eframe::egui::Rect {
     let (app, _) = app(vec![note("a", "Alpha", "body", 1)]);
     let harness = Harness::builder()
         .with_size([width, 780.0])
@@ -281,22 +297,46 @@ fn editor_body_x(width: f32) -> f32 {
     harness
         .get_by_role_and_label(Role::MultilineTextInput, "Note body")
         .rect()
-        .min
-        .x
 }
 
 #[test]
-fn pane_widths_follow_layout_breakpoints() {
-    let wide = editor_body_x(1240.0);
+fn pane_widths_and_centered_editor_measure_follow_layout_contract() {
+    let wide = editor_body_rect(1440.0);
+    let wider = editor_body_rect(1640.0);
     assert!(
-        (wide - 622.0).abs() < 28.0,
-        "wide editor x was {wide}, expected ~622 (236 rail + 330 list + panel chrome)"
+        wide.width() <= EDITOR_MEASURE_MAX + 1.0 && wide.width() >= 660.0,
+        "wide editor measure was {:?}",
+        wide
     );
-    let collapsed = editor_body_x(800.0);
     assert!(
-        (collapsed - 418.0).abs() < 28.0,
-        "collapsed editor x was {collapsed}, expected ~418 (72 rail + 290 list + panel chrome)"
+        (wider.width() - wide.width()).abs() < 1.0
+            && ((wider.min.x - wide.min.x) - 100.0).abs() < 5.0,
+        "capped editor did not stay centered as its pane grew: {wide:?} -> {wider:?}"
     );
+
+    let collapsed = editor_body_rect(1000.0);
+    let collapsed_available = 1000.0 - COLLAPSED_RAIL_WIDTH - COLLAPSED_NOTE_LIST_WIDTH;
+    assert!(
+        collapsed.width() <= editor_measure(collapsed_available) + 1.0,
+        "collapsed editor exceeded its measure: {collapsed:?}"
+    );
+
+    let compact = editor_body_rect(640.0);
+    assert!(
+        compact.width() <= editor_measure(640.0) + 1.0,
+        "compact editor ignored side insets: {compact:?}"
+    );
+}
+
+#[test]
+fn rendering_each_responsive_mode_preserves_the_selected_note() {
+    for width in [1440.0, 1000.0, 640.0] {
+        let (app, _) = app(vec![note("a", "Alpha", "body", 1)]);
+        let harness = Harness::builder()
+            .with_size([width, 780.0])
+            .build_ui_state(|ui, app| app.show(ui), app);
+        assert_eq!(harness.state().selected_note_id(), Some("a"));
+    }
 }
 
 fn assert_icon_target(
