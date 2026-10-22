@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>Crane — Signal Path</title>
+<style>
+:root{--ground:#F7F7F5;--panel:#E7E8E5;--ink:#181918;--signal:#F4C430;--white:#FFFFFF;--sans:"Segoe UI",Candara,"Trebuchet MS",Arial,sans-serif}
+*{box-sizing:border-box}html,body{width:1440px;height:900px;margin:0;overflow:hidden;background:var(--white);color:var(--ink)}body{font:13px/1.4 var(--sans)}
+.titlebar{height:36px;background:var(--ground);border-bottom:1px solid #d7d8d4;display:flex;align-items:center;padding:0 13px}.brand{font-weight:700;letter-spacing:.01em}.local{margin-left:13px;color:#666965;font-size:11px}.wins{display:flex;margin-left:auto;height:36px}.wins span{width:46px;display:grid;place-items:center;border-left:1px solid #dedfdb;font-size:11px}
+.app{height:864px;display:grid;grid-template-columns:220px 350px 1fr}.rail{background:var(--panel);border-right:1px solid #d1d2ce;display:flex;flex-direction:column;padding:18px 0 14px}.railtop{display:flex;align-items:center;padding:0 16px 17px}.railtop strong{font-size:18px;letter-spacing:-.015em}.new{margin-left:auto;border:1px solid var(--ink);background:var(--ink);color:var(--white);height:31px;padding:0 12px;font:650 11px var(--sans);border-radius:4px}
+.navtitle{padding:16px 19px 6px;color:#656864;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.navrow{height:37px;padding:0 17px 0 19px;display:flex;align-items:center;position:relative;color:#383a38}.navrow span:last-child{margin-left:auto;color:#6d706c;font-variant-numeric:tabular-nums;font-size:11px}.navrow.active{background:var(--ground);font-weight:700}.navrow.active:before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:5px;background:var(--signal)}.nested{padding-left:35px}.tagmark{width:15px;color:#555853;font-weight:800}.railfoot{margin-top:auto;border-top:1px solid #d2d3cf;padding-top:8px}
+.browser{background:var(--ground);border-right:1px solid #dedfdb}.browser-head{height:117px;padding:21px 18px 14px;border-bottom:1px solid #dedfdb}.browser-headline{display:flex;align-items:baseline;justify-content:space-between}.browser h1{font-size:21px;line-height:1;margin:0 0 17px;letter-spacing:-.02em}.result{color:#70736e;font-size:11px}.search{height:36px;background:var(--white);border:1px solid #d5d6d2;border-radius:4px;display:flex;align-items:center;padding:0 11px;color:#6a6d69}
+.note{height:112px;padding:15px 17px;border-bottom:1px solid #dedfdb;position:relative}.note.selected{background:var(--white)}.note.selected:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--signal)}.note h2{font-size:14px;line-height:1.25;margin:0 0 7px;font-weight:700}.note p{color:#626560;font-size:12px;line-height:1.42;margin:0;height:34px;overflow:hidden}.meta{display:flex;align-items:center;gap:9px;color:#747772;font-size:10px;margin-top:8px;font-variant-numeric:tabular-nums}.meta b{font-weight:600;color:#555854}
+.editor{background:var(--white)}.toolbar{height:57px;border-bottom:1px solid #e5e5e2;display:flex;align-items:center;padding:0 28px;gap:3px}.tool{height:30px;min-width:30px;border:0;background:transparent;color:#555854;border-radius:3px;font:600 11px var(--sans);padding:0 8px}.tool.active{background:var(--ground);color:var(--ink)}.divider{height:18px;width:1px;background:#dedfdb;margin:0 7px}.saved{margin-left:auto;color:#626560;font-size:11px;display:flex;align-items:center;gap:8px}.saved:before{content:"";width:18px;height:3px;background:var(--signal)}
+.paper{width:700px;margin:0 auto;padding:56px 0 80px}.paper h1{font-size:38px;line-height:1.13;letter-spacing:-.028em;margin:0 0 13px;max-width:620px}.details{color:#767974;font-size:11px;margin-bottom:43px;font-variant-numeric:tabular-nums}.content{font-size:16px;line-height:1.72;max-width:68ch}.content p{margin:0 0 21px}.content h2{font-size:20px;line-height:1.25;letter-spacing:-.014em;margin:34px 0 10px}.content a{color:var(--ink);text-decoration-color:#b09000;text-decoration-thickness:2px;text-underline-offset:3px}.content blockquote{margin:25px 0;padding:15px 20px;background:var(--ground);border-top:3px solid var(--signal);font-size:17px;line-height:1.55}.content code{font:12px Consolas,monospace;background:var(--panel);border-radius:3px;padding:3px 5px}.tasks{margin:12px 0 25px;padding:0;list-style:none}.tasks li{position:relative;margin:8px 0;padding-left:26px}.tasks li:before{content:"";position:absolute;left:0;top:5px;width:13px;height:13px;border:1px solid #8a8d87;background:var(--white)}.tags{display:flex;gap:7px;margin-top:30px}.tags span{font-size:11px;font-weight:700;background:var(--ground);padding:5px 8px;border-radius:3px}.tags span:first-child{box-shadow:inset 0 -3px var(--signal)}
+button{cursor:default}::selection{background:rgba(244,196,48,.45)}
+</style>
+</head>
+<body>
+<header class="titlebar"><span class="brand">Crane</span><span class="local">Private library · saved on this device</span><div class="wins"><span>—</span><span>□</span><span>×</span></div></header>
+<main class="app">
+<aside class="rail">
+  <div class="railtop"><strong>Library</strong><button class="new">New note</button></div>
+  <nav aria-label="Collections">
+    <div class="navtitle">Collections</div><div class="navrow active"><span>Notes</span><span>24</span></div><div class="navrow"><span>Today</span><span>5</span></div><div class="navrow"><span>Untagged</span><span>3</span></div><div class="navrow"><span>To-dos</span><span>7</span></div><div class="navrow"><span>Archive</span><span>12</span></div><div class="navrow"><span>Trash</span><span></span></div>
+    <div class="navtitle">Tags</div><div class="navrow"><span><b class="tagmark">#</b>work</span></div><div class="navrow nested"><span><b class="tagmark">#</b>design</span><span>6</span></div><div class="navrow nested"><span><b class="tagmark">#</b>research</span><span>4</span></div><div class="navrow"><span><b class="tagmark">#</b>personal</span></div><div class="navrow nested"><span><b class="tagmark">#</b>reading</span><span>8</span></div><div class="navrow"><span><b class="tagmark">#</b>ideas</span><span>9</span></div>
+  </nav>
+  <div class="railfoot"><div class="navrow"><span>Data</span></div><div class="navrow"><span>Settings</span></div></div>
+</aside>
+<section class="browser" aria-label="Notes list">
+  <div class="browser-head"><div class="browser-headline"><h1>Notes</h1><span class="result">24 notes</span></div><div class="search">Search titles and text</div></div>
+  <article class="note selected"><h2>Designing a quieter workspace</h2><p>A good workspace does less than it could. It keeps the page steady and lets the words change.</p><div class="meta"><span>10:42</span><b>#work/design</b></div></article>
+  <article class="note"><h2>Release checklist for 0.2</h2><p>Run native checks, test restore from backup, and verify the Windows installer.</p><div class="meta"><span>Yesterday</span><b>#work</b></div></article>
+  <article class="note"><h2>What I learned moving offline</h2><p>Reliability is a feeling created by small, visible promises kept consistently.</p><div class="meta"><span>20 Oct</span><b>#ideas</b></div></article>
+  <article class="note"><h2>October reading notes</h2><p>Margins, attention, and why a page should not compete with its own argument.</p><div class="meta"><span>18 Oct</span><b>#personal/reading</b></div></article>
+  <article class="note"><h2>Backup + restore test cases</h2><p>Corrupt archive, future schema, interrupted write, and a clean rollback path.</p><div class="meta"><span>16 Oct</span><b>#work/research</b></div></article>
+  <article class="note"><h2>Walk before breakfast</h2><p>Leave the phone behind. Take the long path past the quiet side of the park.</p><div class="meta"><span>14 Oct</span><b>#personal</b></div></article>
+</section>
+<section class="editor" aria-label="Editor">
+  <div class="toolbar"><button class="tool active">Aa</button><button class="tool">Bold</button><button class="tool">Italic</button><span class="divider"></span><button class="tool">Link</button><button class="tool">Code</button><button class="tool">Preview</button><span class="saved">Saved locally</span></div>
+  <article class="paper"><h1>Designing a quieter workspace</h1><div class="details">Edited today at 10:42 · 386 words</div>
+    <div class="content"><p>A good workspace does less than it could. It keeps the page steady and lets the words change. The goal isn’t minimalism for its own sake—it is <a href="#">attention without friction</a>.</p>
+      <blockquote>Quiet is not empty. Quiet is every element knowing when to step back.</blockquote>
+      <h2>Three decisions</h2><p>The interface should preserve a clear path from collection to note to sentence. Navigation stays familiar; the document earns the strongest voice.</p>
+      <ul class="tasks"><li>Keep every note available offline.</li><li>Show save state without interrupting thought.</li><li>Let <code>#tags</code> emerge from the writing.</li></ul>
+      <div class="tags"><span>#work/design</span><span>#ideas</span></div>
+    </div>
+  </article>
+</section>
+</main>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440, initial-scale=1">
+<title>Crane — Nordic Daylight</title>
+<style>
+  *{box-sizing:border-box} html,body{margin:0;width:1440px;height:900px;overflow:hidden;background:#F4F5F3;color:#202124}
+  body{font-family:"Segoe UI",Arial,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+  button,input{font:inherit} button{border:0;background:none;color:inherit}
+  .app{width:1440px;height:900px;display:grid;grid-template-columns:208px 360px 872px;background:#FFFFFF}
+  .rail{background:#E8EAE7;border-right:1px solid #D9DCD8;padding:18px 14px 14px;display:flex;flex-direction:column}
+  .brand{height:42px;display:flex;align-items:center;gap:10px;padding:0 8px 12px;font-size:14px;font-weight:650}
+  .mark{width:24px;height:24px;border:1px solid #A9AEA9;border-radius:50%;display:grid;place-items:center;font-family:Georgia,serif;font-size:14px;background:#F4F5F3}
+  .nav{display:grid;gap:2px}.nav button,.tag{height:34px;width:100%;padding:0 9px;display:flex;align-items:center;gap:10px;text-align:left;border-radius:5px;color:#4D524E}
+  .nav button span:first-child{width:16px;text-align:center;color:#6B716C}.nav .active{background:#FFFFFF;color:#202124;font-weight:600;box-shadow:inset 2px 0 #D85645}
+  .count{margin-left:auto;color:#8A8F8A;font-size:11px;font-variant-numeric:tabular-nums}
+  .section{margin:22px 9px 7px;color:#737974;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .tag{height:29px;color:#626763}.hash{color:#D85645;font-weight:700}.tag.child{padding-left:22px}.tag.child:before{content:"└";color:#A1A6A1;margin-right:1px}
+  .rail-foot{margin-top:auto;border-top:1px solid #D5D8D4;padding-top:10px}.rail-foot button{height:34px;width:100%;text-align:left;padding:0 9px;color:#646965}
+  .list{background:#F4F5F3;border-right:1px solid #E0E2DF;display:flex;flex-direction:column}
+  .list-head{height:112px;padding:20px 20px 14px;border-bottom:1px solid #DEE0DD}
+  .list-title{display:flex;align-items:center;margin-bottom:15px}.list-title h1{font:600 21px/1.1 Georgia,serif;margin:0}.list-title .total{margin-left:8px;color:#898E89;font-size:12px}.new{margin-left:auto;width:32px;height:32px;border-radius:50%;background:#D85645;color:#FFFFFF;font-size:21px;line-height:30px}
+  .search{height:34px;border:1px solid #D6D9D5;border-radius:6px;background:#FFFFFF;display:flex;align-items:center;gap:8px;padding:0 10px;color:#858A85}.search input{border:0;outline:0;background:transparent;width:100%;color:#202124}.search input::placeholder{color:#8D928E}
+  .notes{overflow:hidden}.note{height:126px;padding:16px 20px;border-bottom:1px solid #E0E2DF;position:relative}.note.active{background:#FFFFFF}.note.active:before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:2px;background:#D85645;border-radius:2px}
+  .note h2{font-size:14px;line-height:1.25;margin:0 0 7px;font-weight:650}.note p{margin:0 0 9px;font:14px/1.45 Georgia,serif;color:#666A66;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.meta{font-size:10.5px;color:#8A8F8A;display:flex;gap:8px}.meta .ntag{color:#B44A3D}
+  .editor{background:#FFFFFF;position:relative;display:flex;flex-direction:column}.toolbar{height:58px;border-bottom:1px solid #ECEDEA;display:flex;align-items:center;padding:0 24px;color:#6B706C}.tool{min-width:32px;height:32px;border-radius:5px;display:grid;place-items:center;font-size:15px}.tool:hover{background:#F3F4F2}.tool.sep{margin-left:9px;border-left:1px solid #E4E5E3;border-radius:0;padding-left:12px}.status{margin-left:auto;font-size:11px;color:#858A86}.status b{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#6F8D73}
+  .paper{width:690px;margin:0 auto;padding:58px 44px 70px}.title{font:600 40px/1.14 Georgia,serif;letter-spacing:-.025em;margin:0 0 14px;max-width:610px}.byline{display:flex;gap:14px;color:#8A8E8A;font-size:11px;margin-bottom:39px}.byline .tagline{color:#B4473A}
+  .body{font:16px/1.72 Georgia,"Times New Roman",serif;color:#2D302D;max-width:66ch}.body p{margin:0 0 19px}.body h2{font:600 23px/1.25 Georgia,serif;letter-spacing:-.015em;margin:31px 0 12px}.body a{color:#B4473A;text-decoration-color:#DAB0AA;text-underline-offset:3px}.body .md{color:#C6C9C5;font-family:"Segoe UI",sans-serif;font-size:12px}.body ul{list-style:none;margin:5px 0 23px;padding:0}.body li{position:relative;padding-left:25px;margin:7px 0}.body li:before{content:"—";position:absolute;left:2px;color:#D85645}.code{font:13px/1.55 Consolas,monospace;background:#F4F5F3;border-radius:4px;padding:11px 14px;margin-top:20px;color:#424642}.code .syntax{color:#D85645}.savebar{position:absolute;right:24px;bottom:18px;color:#8A8F8A;font-size:10px;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<main class="app" aria-label="Crane notes app concept">
+  <aside class="rail">
+    <div class="brand"><span class="mark">C</span>Crane</div>
+    <nav class="nav" aria-label="Collections">
+      <button class="active"><span>▤</span>Notes <span class="count">24</span></button>
+      <button><span>◷</span>Today <span class="count">4</span></button>
+      <button><span>◇</span>Untagged <span class="count">3</span></button>
+      <button><span>✓</span>To-dos <span class="count">7</span></button>
+      <button><span>□</span>Archive <span class="count">11</span></button>
+      <button><span>⌫</span>Trash <span class="count">2</span></button>
+    </nav>
+    <div class="section">Tags</div>
+    <div class="tag"><span class="hash">#</span>work <span class="count">9</span></div>
+    <div class="tag child">studio <span class="count">5</span></div>
+    <div class="tag child">writing <span class="count">4</span></div>
+    <div class="tag"><span class="hash">#</span>personal <span class="count">8</span></div>
+    <div class="tag child">reading <span class="count">3</span></div>
+    <div class="tag"><span class="hash">#</span>ideas <span class="count">6</span></div>
+    <div class="rail-foot"><button>↥&nbsp;&nbsp; Data</button><button>⚙&nbsp;&nbsp; Settings</button></div>
+  </aside>
+  <section class="list">
+    <header class="list-head"><div class="list-title"><h1>Notes</h1><span class="total">24</span><button class="new" aria-label="New note">+</button></div><label class="search">⌕<input placeholder="Search notes" aria-label="Search notes"></label></header>
+    <div class="notes">
+      <article class="note active"><h2>Designing a quieter workspace</h2><p>Less visual noise doesn’t mean fewer tools. It means giving each tool a clear moment.</p><div class="meta"><span>Today, 10:42</span><span class="ntag">#work/studio</span></div></article>
+      <article class="note"><h2>October reading list</h2><p>A short shelf for colder evenings: essays, field notes, and one patient novel.</p><div class="meta"><span>Yesterday</span><span class="ntag">#personal/reading</span></div></article>
+      <article class="note"><h2>Window light observations</h2><p>North light stays even across the desk; move the monitor before winter.</p><div class="meta"><span>Mon</span><span class="ntag">#ideas</span></div></article>
+      <article class="note"><h2>Studio reset checklist</h2><p>Clear the desk, file loose pages, charge recorder, water the fern.</p><div class="meta"><span>18 Oct</span><span class="ntag">#to-do</span></div></article>
+      <article class="note"><h2>Notes from the train</h2><p>Fields after rain. The small stations were all warm yellow against the blue.</p><div class="meta"><span>16 Oct</span><span class="ntag">#personal</span></div></article>
+      <article class="note"><h2>Crane keyboard map</h2><p>Keep writing commands close and moving commands predictable.</p><div class="meta"><span>12 Oct</span><span class="ntag">#work</span></div></article>
+    </div>
+  </section>
+  <article class="editor">
+    <header class="toolbar"><button class="tool">B</button><button class="tool"><i>I</i></button><button class="tool">H</button><button class="tool">≡</button><button class="tool sep">↗</button><span class="status"><b></b>Saved locally</span><button class="tool" aria-label="More">•••</button></header>
+    <div class="paper">
+      <h1 class="title">Designing a quieter workspace</h1>
+      <div class="byline"><span>Edited today at 10:42</span><span class="tagline">#work/studio</span><span class="tagline">#ideas</span></div>
+      <div class="body"><p>A quiet workspace is not an empty one. It is a place where the next action is obvious and everything else knows how to wait.</p>
+        <h2><span class="md">##&nbsp;</span>Keep the useful edges</h2>
+        <p>The desk can still hold references, tools, and half-formed thoughts. The difference is <strong>hierarchy</strong>: writing stays bright while navigation recedes into daylight.</p>
+        <ul><li>Keep today’s note in reach.</li><li>Let finished work move out of sight.</li><li>Use <a href="#">#tags</a> where the thought naturally belongs.</li></ul>
+        <p>Good calm is active. It protects attention without hiding capability.</p>
+        <div class="code"><span class="syntax">#</span> a tiny rule for the room<br>attention = visible_work - visual_noise</div>
+      </div>
+    </div><div class="savebar">568 words · 3 min read</div>
+  </article>
+</main>
+</body>
+</html>
