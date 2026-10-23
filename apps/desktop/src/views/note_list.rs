@@ -202,7 +202,7 @@ fn note_row(
 
     let excerpt = plain_excerpt(&note.body);
     let excerpt_text = excerpt_lines(&excerpt).join("\n");
-    let excerpt_response = ui.put(
+    let excerpt_response = ui.place(
         egui::Rect::from_min_size(
             egui::pos2(left, rect.top() + 35.0),
             egui::vec2((right - left).max(0.0), 32.0),

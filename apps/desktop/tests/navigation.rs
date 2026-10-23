@@ -166,6 +166,45 @@ fn nordic_library_and_browser_present_hierarchy_and_bounded_metadata() {
 }
 
 #[test]
+fn note_browser_rows_do_not_overlap() {
+    let (app, _) = app(vec![
+        note(
+            "a",
+            "Alpha",
+            "First excerpt with enough words for two lines in the browser.",
+            3,
+        ),
+        note(
+            "b",
+            "Beta",
+            "Second excerpt with enough words for two lines in the browser.",
+            2,
+        ),
+        note(
+            "c",
+            "Gamma",
+            "Third excerpt with enough words for two lines in the browser.",
+            1,
+        ),
+    ]);
+    let harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let alpha = harness.get_by_role_and_label(Role::Button, "Alpha").rect();
+    let beta = harness.get_by_role_and_label(Role::Button, "Beta").rect();
+    let gamma = harness.get_by_role_and_label(Role::Button, "Gamma").rect();
+    assert!(
+        beta.top() >= alpha.bottom(),
+        "Alpha and Beta note cards overlapped: {alpha:?} / {beta:?}"
+    );
+    assert!(
+        gamma.top() >= beta.bottom(),
+        "Beta and Gamma note cards overlapped: {beta:?} / {gamma:?}"
+    );
+}
+
+#[test]
 fn relative_time_table_is_stable_and_future_safe() {
     const MINUTE: u64 = 60_000;
     const HOUR: u64 = 60 * MINUTE;
