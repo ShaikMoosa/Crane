@@ -73,6 +73,54 @@ fn preview_and_theme_toggle_without_invalidating_unrelated_cache() {
 }
 
 #[test]
+fn live_markdown_styling_preserves_source_and_reuses_the_parse() {
+    let source = "# Heading\r\n\r\nनमस्ते 🕊️ [[Field Notes]] #work/process";
+    let (app, _) = app(vec![note("alpha", "Alpha", source, 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .allow_missing_glyphs()
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    assert_eq!(harness.state().selected_draft().unwrap().body, source);
+    assert_eq!(harness.state().cache_stats().markdown_parses, 1);
+    let preview_before = harness.state().cache_stats().preview_recomputes;
+    let query_before = harness.state().cache_stats().query_recomputes;
+
+    harness.run_steps(3);
+    assert_eq!(harness.state().selected_draft().unwrap().body, source);
+    assert_eq!(harness.state().cache_stats().markdown_parses, 1);
+    assert_eq!(
+        harness.state().cache_stats().preview_recomputes,
+        preview_before
+    );
+    assert_eq!(harness.state().cache_stats().query_recomputes, query_before);
+
+    harness.get_by_label("Use light theme").click();
+    harness.run_steps(2);
+    assert_eq!(harness.state().selected_draft().unwrap().body, source);
+    assert_eq!(harness.state().cache_stats().markdown_parses, 1);
+}
+
+#[test]
+fn live_markdown_cache_handles_a_near_two_mib_note_once() {
+    let body = format!("# Large note\n\n{}", "a".repeat(1_900_000));
+    let (app, _) = app(vec![note("large", "Large", &body, 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .allow_missing_glyphs()
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let initial = harness.state().cache_stats();
+    assert_eq!(initial.markdown_parses, 1);
+    assert_eq!(harness.state().selected_draft().unwrap().body, body);
+    harness.run_steps(2);
+    let repeated = harness.state().cache_stats();
+    assert_eq!(repeated.markdown_parses, 1);
+    assert_eq!(repeated.preview_recomputes, initial.preview_recomputes);
+    assert_eq!(repeated.query_recomputes, initial.query_recomputes);
+}
+
+#[test]
 fn failed_or_missing_save_keeps_draft_and_selection() {
     let (mut app, _) = app(vec![note("alpha", "Alpha", "Old", 1)]);
     app.edit_selected_for_test("Alpha", "Keep this draft");
@@ -134,6 +182,25 @@ fn undo_state_is_isolated_between_notes() {
     harness.key_press_modifiers(Modifiers::CTRL, Key::Z);
     harness.run();
     assert_eq!(harness.state().selected_draft().unwrap().body, "Beta body");
+}
+
+#[test]
+fn same_note_undo_restores_the_markdown_source() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "**original**", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    let body = harness.get_by_role_and_label(Role::MultilineTextInput, "Note body");
+    body.focus();
+    body.set_text_value_accesskit("**changed**");
+    harness.run_steps(2);
+    harness.key_press_modifiers(Modifiers::CTRL | Modifiers::COMMAND, Key::Z);
+    harness.run_steps(2);
+
+    assert_eq!(
+        harness.state().selected_draft().unwrap().body,
+        "**original**"
+    );
 }
 
 #[test]

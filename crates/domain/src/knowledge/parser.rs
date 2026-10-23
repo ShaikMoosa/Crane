@@ -426,13 +426,13 @@ pub fn parse_headings(body: &str) -> Vec<HeadingFact> {
         }
         let content_raw = rest.trim();
         // Strip an optional closing hash run preceded by whitespace.
-        let content_raw = match content_raw.rfind(|c: char| c != '#') {
-            Some(end)
-                if end + 1 < content_raw.len() && content_raw[..=end].ends_with([' ', '\t']) =>
-            {
-                content_raw[..=end].trim_end()
-            }
-            _ => content_raw,
+        let without_closing_hashes = content_raw.trim_end_matches('#');
+        let content_raw = if without_closing_hashes.len() < content_raw.len()
+            && without_closing_hashes.ends_with([' ', '\t'])
+        {
+            without_closing_hashes.trim_end()
+        } else {
+            content_raw
         };
         if content_raw.is_empty() {
             continue;

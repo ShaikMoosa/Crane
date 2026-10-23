@@ -4,6 +4,7 @@ use crate::inspector::{InspectorIntent, InspectorState};
 use crate::knowledge_navigation::{
     ChooserIntent, ChooserState, CompletionState, KnowledgeNavIntent,
 };
+use crate::markdown_layouter::MarkdownLayouter;
 use crate::query_dispatch::{enqueue_deferred_query, flush_deferred_queries, PendingQuery};
 use crate::quick_open::{QuickOpenIntent, QuickOpenState};
 use crate::settings::SettingsController;
@@ -37,6 +38,7 @@ const GENERIC_REQUEST_START: u64 = 1 << 63;
 pub struct CacheStats {
     pub query_recomputes: u64,
     pub preview_recomputes: u64,
+    pub markdown_parses: u64,
 }
 
 type ListKey = (u64, CollectionView, Option<String>, String);
@@ -140,6 +142,7 @@ pub struct CraneApp {
     committed_knowledge: Option<(String, u64, KnowledgeView)>,
     inspector_floating: bool,
     formatting: FormattingState,
+    markdown_layouter: MarkdownLayouter,
 }
 
 impl CraneApp {
@@ -248,6 +251,7 @@ impl CraneApp {
             committed_knowledge: None,
             inspector_floating: false,
             formatting: FormattingState::default(),
+            markdown_layouter: MarkdownLayouter::default(),
         }
     }
 
@@ -591,7 +595,10 @@ impl CraneApp {
     }
 
     pub fn cache_stats(&self) -> CacheStats {
-        self.cache_stats
+        CacheStats {
+            markdown_parses: self.markdown_layouter.parse_count(),
+            ..self.cache_stats
+        }
     }
 
     pub fn set_query(&mut self, query: impl Into<String>) {
@@ -925,6 +932,8 @@ impl CraneApp {
                     formatting: Some(editor::FormattingView {
                         state: &mut self.formatting,
                     }),
+                    theme: self.settings.value().theme,
+                    markdown_layouter: &mut self.markdown_layouter,
                 },
             )
         } else {
@@ -945,6 +954,8 @@ impl CraneApp {
                     note_actions_open: &mut self.note_actions_open,
                     completion: None,
                     formatting: None,
+                    theme: self.settings.value().theme,
+                    markdown_layouter: &mut self.markdown_layouter,
                 },
             )
         };

@@ -2,10 +2,12 @@ use crate::draft::{DraftCoordinator, SavePresentation};
 use crate::formatting::FormattingState;
 use crate::icons::{icon_button, IconId};
 use crate::knowledge_navigation::{byte_to_char, char_to_byte, CompletionState, WikiFragment};
+use crate::markdown_layouter::{plain_text_job, MarkdownLayouter};
 use crate::views::preview::PreviewAction;
 use crane_application::knowledge::Query;
 use crane_domain::knowledge::WikiLink;
 use crane_domain::MarkdownDocument;
+use crane_storage::ThemeChoice;
 use eframe::egui;
 use eframe::egui::{
     text::{CCursor, CCursorRange},
@@ -63,6 +65,8 @@ pub struct EditorView<'a> {
     pub note_actions_open: &'a mut bool,
     pub completion: Option<CompletionView<'a>>,
     pub formatting: Option<FormattingView<'a>>,
+    pub theme: ThemeChoice,
+    pub markdown_layouter: &'a mut MarkdownLayouter,
 }
 
 pub fn show(
@@ -83,6 +87,8 @@ pub fn show(
         note_actions_open,
         mut completion,
         mut formatting,
+        theme,
+        markdown_layouter,
     } = view;
     let mut actions = EditorActions::default();
     let note_id = draft.current().note_id.clone();
@@ -231,6 +237,8 @@ pub fn show(
             mutations_enabled,
             &mut completion,
             &mut formatting,
+            theme,
+            markdown_layouter,
             &mut actions,
         );
     }
@@ -248,6 +256,8 @@ fn show_body(
     mutations_enabled: bool,
     completion: &mut Option<CompletionView<'_>>,
     formatting: &mut Option<FormattingView<'_>>,
+    theme: ThemeChoice,
+    markdown_layouter: &mut MarkdownLayouter,
     actions: &mut EditorActions,
 ) {
     let mut accept_index = None;
@@ -276,6 +286,19 @@ fn show_body(
 
     let body_size = ui.available_size();
     let body_id = editor_widget_id(note_id, "body");
+    let revision = draft.current().revision;
+    let mut layout_error = None;
+    let mut layouter = |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, wrap_width: f32| {
+        let source = buffer.as_str();
+        let job = match markdown_layouter.layout_job(note_id, revision, source, wrap_width, theme) {
+            Ok(job) => job,
+            Err(error) => {
+                layout_error = Some(error);
+                plain_text_job(source, wrap_width, theme)
+            }
+        };
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
     let body_response = ui
         .add_enabled(
             mutations_enabled,
@@ -284,9 +307,14 @@ fn show_body(
                 .hint_text("Write in Markdown…")
                 .desired_rows(24)
                 .font(egui::TextStyle::Body)
+                .layouter(&mut layouter)
                 .desired_width(body_size.x),
         )
         .accessible_name("Note body");
+    drop(layouter);
+    if let Some(error) = layout_error {
+        actions.link_error = Some(error.to_string());
+    }
     if request_body_focus {
         body_response.request_focus();
     }

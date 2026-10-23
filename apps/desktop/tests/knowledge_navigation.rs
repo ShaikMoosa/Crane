@@ -145,6 +145,30 @@ fn preview_wiki_link_opens_resolved_note() {
 }
 
 #[test]
+fn heading_navigation_keeps_the_target_markdown_byte_exact() {
+    let target = "Intro\r\n\r\n## नमस्ते 🕊️\r\nExact body";
+    let (app, _) = app(vec![
+        note("a", "Alpha", "See [[Beta#नमस्ते 🕊️]]!", 3),
+        note("b", "Beta", target, 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .allow_missing_glyphs()
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Preview Markdown").click();
+    settle(&mut harness);
+    harness.get_by_label("Open linked note: Beta").click();
+    settle(&mut harness);
+
+    assert_eq!(harness.state().selected_note_id(), Some("b"));
+    assert_eq!(harness.state().selected_draft().unwrap().body, target);
+    harness.get_by_label("Edit Markdown").click();
+    harness.run_steps(2);
+    harness.get_by_role_and_label(Role::MultilineTextInput, "Note body");
+}
+
+#[test]
 fn ambiguous_link_opens_chooser_and_navigates_to_choice() {
     let (app, _) = app(vec![
         note("a", "Alpha", "See [[Dupe]]!", 4),

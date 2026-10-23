@@ -113,6 +113,17 @@ fn normalization_keeps_punctuation_and_uses_unicode_lowercase() {
 }
 
 #[test]
+fn heading_ending_in_multibyte_text_is_byte_safe() {
+    let body = "## नमस्ते 🕊️\r\n\r\n## closed safely ###\r\n";
+    let headings = parse_headings(body);
+
+    assert_eq!(headings.len(), 2);
+    assert_eq!(headings[0].text, "नमस्ते 🕊️");
+    assert_eq!(&body[headings[0].range.clone()], "नमस्ते 🕊️");
+    assert_eq!(headings[1].text, "closed safely");
+}
+
+#[test]
 fn parser_is_total_and_does_not_modify_source() {
     for body in ["", "[[", "]]", "\\", "\u{10FFFF}\u{301}", "[[é]]\r\n[[x]]"] {
         let before = body.to_string();
