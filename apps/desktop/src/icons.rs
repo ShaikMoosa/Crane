@@ -28,6 +28,9 @@ pub enum IconId {
     FileText,
     Calendar,
     Tag,
+    Ellipsis,
+    Settings,
+    DatabaseBackup,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -249,6 +252,30 @@ pub const ALL_ICONS: &[IconAsset] = &[
         feather_derived: false,
         bytes: include_bytes!("../assets/icons/lucide/tag.svg"),
     },
+    IconAsset {
+        id: IconId::Ellipsis,
+        file: "ellipsis.svg",
+        lucide_name: "ellipsis",
+        sha256: "4f495cc72013ffdfec677f03b33a150f7b4dd741979283fd6853a09024bca112",
+        feather_derived: true,
+        bytes: include_bytes!("../assets/icons/lucide/ellipsis.svg"),
+    },
+    IconAsset {
+        id: IconId::Settings,
+        file: "settings.svg",
+        lucide_name: "settings",
+        sha256: "0ae27fd0f81999229e3127ac96c5b32edfea448e291d509e76212b917551d66b",
+        feather_derived: true,
+        bytes: include_bytes!("../assets/icons/lucide/settings.svg"),
+    },
+    IconAsset {
+        id: IconId::DatabaseBackup,
+        file: "database-backup.svg",
+        lucide_name: "database-backup",
+        sha256: "7c3390be2ace227565d806d568579e1a5a54847be026a1d25117aea2df51971a",
+        feather_derived: false,
+        bytes: include_bytes!("../assets/icons/lucide/database-backup.svg"),
+    },
 ];
 
 pub fn icon_asset(id: IconId) -> &'static IconAsset {
@@ -304,8 +331,42 @@ pub fn icon_button(
         egui::Button::image(icon_image(icon, color, 17.0)),
     );
     let response = response.on_hover_text(tooltip);
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, accessible_name));
+    let enabled = ui.is_enabled();
     response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, accessible_name));
+    response
+}
+
+pub fn accent_icon_button(
+    ui: &mut egui::Ui,
+    icon: IconId,
+    accessible_name: &str,
+    tooltip: &str,
+    fill: egui::Color32,
+    foreground: egui::Color32,
+) -> egui::Response {
+    ensure_image_loaders(ui.ctx());
+    let edge = target_size(ui);
+    let response = ui.add_sized(
+        [edge, edge],
+        egui::Button::image(icon_image(icon, foreground, 18.0))
+            .fill(fill)
+            .corner_radius(edge / 2.0),
+    );
+    let response = response.on_hover_text(tooltip);
+    let enabled = ui.is_enabled();
+    response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, accessible_name));
+    response
+}
+
+pub(crate) fn icon_for_text_button(
+    ui: &egui::Ui,
+    icon: IconId,
+    color: egui::Color32,
+) -> egui::Image<'static> {
+    ensure_image_loaders(ui.ctx());
+    icon_image(icon, color, 16.0)
 }
 
 fn ensure_image_loaders(ctx: &egui::Context) {

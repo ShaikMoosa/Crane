@@ -16,7 +16,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 ### MIT License (Feather-derived subset)
 
-The following vendored Lucide icons are derived from the Feather project and are additionally covered by the MIT License below: plus, search, info, x, chevron-down, chevron-right, arrow-left, trash, italic, code, link, triangle-alert, calendar.
+The following vendored Lucide icons are derived from the Feather project and are additionally covered by the MIT License below: plus, search, info, x, chevron-down, chevron-right, arrow-left, trash, italic, code, link, triangle-alert, calendar, ellipsis, settings.
 
 MIT License
 

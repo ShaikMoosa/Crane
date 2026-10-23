@@ -684,6 +684,7 @@ impl CraneApp {
                         active_tag: self.view.tag.as_deref(),
                         collapsed,
                         mutations_enabled,
+                        theme: self.settings.value().theme,
                     },
                 );
             },
@@ -754,17 +755,23 @@ impl CraneApp {
             self.view.selected_id.as_deref(),
             &mut self.view.query,
             std::mem::take(&mut self.request_search_focus),
-            &format!(
-                "{} ({})",
-                collection_label(self.view.collection),
-                visible.len()
-            ),
+            collection_label(self.view.collection),
+            self.settings.value().theme,
+            self.transfers.can_mutate(),
         );
         if self.view.query != previous_query {
             self.query_cache.key = None;
         }
         if list_action.quick_open {
             crate::quick_open::open(&mut self.quick_open, self.view.selected_id.clone());
+        }
+        if list_action.clear_search {
+            self.view.query.clear();
+            self.query_cache.key = None;
+            self.request_search_focus = true;
+        }
+        if list_action.create && self.transfers.can_mutate() {
+            self.request_after_save(DeferredAction::Create);
         }
         if let Some(id) = list_action.selected {
             self.request_after_save(DeferredAction::Select(id));

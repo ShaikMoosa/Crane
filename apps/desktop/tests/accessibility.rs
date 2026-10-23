@@ -122,7 +122,9 @@ fn preview_preserves_nested_link_roles_and_reports_open_failures() {
     for label in ["Heading link", "Quote link", "List link"] {
         harness.get_by_role_and_label(Role::Link, label);
     }
-    harness.get_by_label("Heading link").click();
+    harness
+        .get_by_role_and_label(Role::Link, "Heading link")
+        .click();
     harness.run();
     assert_eq!(
         harness.state().1.as_deref(),
@@ -217,18 +219,32 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
         .with_size([1240.0, 780.0])
         .build_ui_state(|ui, app| app.show(ui), app);
 
+    let mut notes_step = None;
     let mut new_note_step = None;
     let mut search_step = None;
+    let mut row_step = None;
     let mut save_step = None;
     let mut body_step = None;
     for step in 0..64 {
         harness.key_press(Key::Tab);
         harness.run();
+        if harness
+            .get_by_role_and_label(Role::Button, "Notes")
+            .is_focused()
+        {
+            notes_step.get_or_insert(step);
+        }
         if harness.get_by_label("New note").is_focused() {
             new_note_step.get_or_insert(step);
         }
         if harness.get_by_label("Search notes").is_focused() {
             search_step.get_or_insert(step);
+        }
+        if harness
+            .get_by_role_and_label(Role::Button, "Alpha")
+            .is_focused()
+        {
+            row_step.get_or_insert(step);
         }
         if harness.get_by_label("Save now").is_focused() {
             save_step.get_or_insert(step);
@@ -237,11 +253,15 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
             body_step.get_or_insert(step);
         }
     }
+    let notes_step = notes_step.expect("Tab order never reached the library destinations");
     let new_note_step = new_note_step.expect("Tab order never reached New note");
     let search_step = search_step.expect("Tab order never reached search");
+    let row_step = row_step.expect("Tab order never reached a note row");
     let save_step = save_step.expect("Tab order never reached Save now");
     let body_step = body_step.expect("Tab order never reached the note body");
+    assert!(notes_step < new_note_step);
     assert!(new_note_step < search_step);
-    assert!(search_step < save_step);
+    assert!(search_step < row_step);
+    assert!(row_step < save_step);
     assert!(save_step < body_step);
 }

@@ -39,13 +39,21 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
         transfer_status,
     } = view;
     let mut actions = LibraryActions::default();
+    let text_color = ui.visuals().text_color();
+    let data_icon =
+        crate::icons::icon_for_text_button(ui, crate::icons::IconId::DatabaseBackup, text_color);
+    let data_button = if collapsed {
+        egui::Button::image(data_icon)
+    } else {
+        egui::Button::image_and_text(data_icon, "Data")
+    };
     let data = ui
         .add_enabled(
             mutations_enabled,
-            egui::Button::new(if collapsed { "D" } else { "Data" })
-                .min_size(egui::vec2(44.0, 44.0)),
+            data_button.min_size(egui::vec2(44.0, 44.0)),
         )
-        .accessible_name("Data");
+        .accessible_name("Data")
+        .on_hover_text("Data and backups");
     data.widget_info(|| {
         egui::WidgetInfo::labeled(egui::Role::DisclosureTriangle, mutations_enabled, "Data")
     });
@@ -89,16 +97,17 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
         ThemeChoice::Dark => "Use light theme",
         ThemeChoice::Light => "Use dark theme",
     };
+    let settings_icon =
+        crate::icons::icon_for_text_button(ui, crate::icons::IconId::Settings, text_color);
+    let settings_button = if collapsed {
+        egui::Button::image(settings_icon)
+    } else {
+        egui::Button::image_and_text(settings_icon, "Settings")
+    };
     actions.toggle_theme = ui
-        .button(if collapsed {
-            match theme {
-                ThemeChoice::Dark => "L",
-                ThemeChoice::Light => "D",
-            }
-        } else {
-            theme_label
-        })
+        .add(settings_button.min_size(egui::vec2(44.0, 44.0)))
         .accessible_name(theme_label)
+        .on_hover_text(theme_label)
         .clicked();
     let mut reduced = reduced_motion;
     let reduced_response = ui

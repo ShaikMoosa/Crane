@@ -157,6 +157,24 @@
       "lucideName": "tag",
       "sha256": "85e11c07b29f5b67410e0f14c84799d9406320cd4575b7c8322f31910e0582cc",
       "featherDerived": false
+    },
+    {
+      "file": "ellipsis.svg",
+      "lucideName": "ellipsis",
+      "sha256": "4f495cc72013ffdfec677f03b33a150f7b4dd741979283fd6853a09024bca112",
+      "featherDerived": true
+    },
+    {
+      "file": "settings.svg",
+      "lucideName": "settings",
+      "sha256": "0ae27fd0f81999229e3127ac96c5b32edfea448e291d509e76212b917551d66b",
+      "featherDerived": true
+    },
+    {
+      "file": "database-backup.svg",
+      "lucideName": "database-backup",
+      "sha256": "7c3390be2ace227565d806d568579e1a5a54847be026a1d25117aea2df51971a",
+      "featherDerived": false
     }
   ]
 }

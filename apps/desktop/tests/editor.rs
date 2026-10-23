@@ -58,7 +58,7 @@ fn preview_and_theme_toggle_without_invalidating_unrelated_cache() {
     let before = harness.state().cache_stats().preview_recomputes;
     harness.get_by_label("Preview Markdown").click();
     harness.run();
-    harness.get_by_label("Heading");
+    harness.get_by_role_and_label(Role::Heading, "Heading");
     let parsed = harness.state().cache_stats().preview_recomputes;
     assert_eq!(parsed, before + 1);
     harness.run();

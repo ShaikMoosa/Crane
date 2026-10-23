@@ -42,7 +42,12 @@ fn manifest_matches_embedded_subset_with_no_unused_icons() {
             asset.lucide_name
         );
     }
-    let _ = IconId::Plus;
+    let _ = [
+        IconId::Plus,
+        IconId::Ellipsis,
+        IconId::Settings,
+        IconId::DatabaseBackup,
+    ];
 }
 
 #[test]

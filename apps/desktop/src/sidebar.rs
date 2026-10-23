@@ -1,6 +1,6 @@
-use crate::icons::{icon_button, IconId};
 use crane_application::knowledge::{CollectionView, SidebarCounts};
 use crane_domain::knowledge::TagNode;
+use crane_storage::ThemeChoice;
 use eframe::egui;
 use std::collections::HashSet;
 
@@ -23,6 +23,7 @@ pub struct SidebarView<'a> {
     pub active_tag: Option<&'a str>,
     pub collapsed: bool,
     pub mutations_enabled: bool,
+    pub theme: ThemeChoice,
 }
 
 pub fn show(
@@ -37,32 +38,25 @@ pub fn show(
         active_tag,
         collapsed,
         mutations_enabled,
+        theme,
     } = view;
     let mut intent = None;
-    ui.heading(if collapsed { "C" } else { "Crane" });
-    if collapsed {
-        if icon_button(ui, IconId::Plus, "New note", "New note").clicked() && mutations_enabled {
-            intent = Some(SidebarIntent::Create);
-        }
-    } else if ui
-        .add_enabled(
-            mutations_enabled,
-            egui::Button::new("+  New note")
-                .min_size(egui::vec2(0.0, crate::icons::target_size(ui))),
-        )
-        .accessible_name("New note")
-        .clicked()
-    {
-        intent = Some(SidebarIntent::Create);
-    }
+    let identity = ui.heading(if collapsed { "C" } else { "Crane" });
+    identity.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Heading, true, "Crane"));
     ui.separator();
     egui::ScrollArea::vertical()
         .id_salt("crane-library-tags")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            if let Some(clicked) =
-                show_collections(ui, counts, active, active_tag, collapsed, mutations_enabled)
-            {
+            if let Some(clicked) = show_collections(
+                ui,
+                counts,
+                active,
+                active_tag,
+                collapsed,
+                mutations_enabled,
+                theme,
+            ) {
                 intent = Some(clicked);
             }
             if !tag_tree.is_empty() {
@@ -71,9 +65,15 @@ pub fn show(
                     ui.small("TAGS");
                 }
                 for node in tag_tree {
-                    if let Some(clicked) =
-                        show_tag(ui, node, state, active_tag, collapsed, mutations_enabled)
-                    {
+                    if let Some(clicked) = show_tag(
+                        ui,
+                        node,
+                        state,
+                        active_tag,
+                        collapsed,
+                        mutations_enabled,
+                        theme,
+                    ) {
                         intent = Some(clicked);
                     }
                 }
@@ -90,6 +90,7 @@ fn show_collections(
     active_tag: Option<&str>,
     collapsed: bool,
     mutations_enabled: bool,
+    theme: ThemeChoice,
 ) -> Option<SidebarIntent> {
     let mut intent = None;
     for (collection, label, short, count) in [
@@ -101,25 +102,16 @@ fn show_collections(
         (CollectionView::Archive, "Archive", "A", counts.archive),
         (CollectionView::Trash, "Trash", "R", counts.trash),
     ] {
-        let expanded = format!("{label}  {count}");
-        let text = if collapsed { short } else { &expanded };
-        let response = ui.add_enabled(
+        let response = destination_row(
+            ui,
+            label,
+            short,
+            Some(count),
+            active == collection && active_tag.is_none(),
+            collapsed,
             mutations_enabled,
-            egui::Button::selectable(active == collection && active_tag.is_none(), text),
+            theme,
         );
-        let response = if collapsed {
-            response.on_hover_text(label)
-        } else {
-            response
-        };
-        response.widget_info(|| {
-            egui::WidgetInfo::selected(
-                egui::Role::Button,
-                true,
-                active == collection && active_tag.is_none(),
-                label,
-            )
-        });
         if response.clicked() {
             intent = Some(SidebarIntent::Collection(collection));
         }
@@ -134,6 +126,7 @@ fn show_tag(
     active_tag: Option<&str>,
     collapsed: bool,
     mutations_enabled: bool,
+    theme: ThemeChoice,
 ) -> Option<SidebarIntent> {
     let mut intent = None;
     let is_collapsed = state.collapsed_tags.contains(&node.path);
@@ -162,27 +155,110 @@ fn show_tag(
             }
         }
         let label = format!("#{}", node.path);
-        let response = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::selectable(
-                    active_tag == Some(node.path.as_str()),
-                    if collapsed { "#" } else { &label },
-                ),
-            )
-            .accessible_name(&label);
+        let response = destination_row(
+            ui,
+            &label,
+            "#",
+            Some(node.note_count),
+            active_tag == Some(node.path.as_str()),
+            collapsed,
+            mutations_enabled,
+            theme,
+        );
         if response.clicked() {
             intent = Some(SidebarIntent::Tag(Some(node.path.clone())));
         }
     });
     if !is_collapsed {
         for child in &node.children {
-            if let Some(clicked) =
-                show_tag(ui, child, state, active_tag, collapsed, mutations_enabled)
-            {
+            if let Some(clicked) = show_tag(
+                ui,
+                child,
+                state,
+                active_tag,
+                collapsed,
+                mutations_enabled,
+                theme,
+            ) {
                 intent = Some(clicked);
             }
         }
     }
     intent
+}
+
+#[allow(clippy::too_many_arguments)]
+fn destination_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    collapsed_label: &str,
+    count: Option<usize>,
+    selected: bool,
+    collapsed: bool,
+    enabled: bool,
+    theme_choice: ThemeChoice,
+) -> egui::Response {
+    let palette = crate::theme::tokens(theme_choice);
+    let edge = crate::icons::target_size(ui);
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), edge), egui::Sense::click());
+    let fill = if selected {
+        palette.surface_selected
+    } else if response.hovered() {
+        palette.surface_hover
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect.shrink(2.0), 6, fill);
+    if selected {
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(rect.left() + 2.0, rect.top() + 7.0),
+                egui::pos2(rect.left() + 5.0, rect.bottom() - 7.0),
+            ),
+            2,
+            palette.accent,
+        );
+    }
+    let color = if enabled {
+        palette.text_primary
+    } else {
+        palette.text_disabled
+    };
+    ui.painter().text(
+        egui::pos2(
+            if collapsed {
+                rect.center().x
+            } else {
+                rect.left() + 13.0
+            },
+            rect.center().y,
+        ),
+        if collapsed {
+            egui::Align2::CENTER_CENTER
+        } else {
+            egui::Align2::LEFT_CENTER
+        },
+        if collapsed { collapsed_label } else { label },
+        egui::TextStyle::Button.resolve(ui.style()),
+        color,
+    );
+    if !collapsed {
+        if let Some(count) = count {
+            ui.painter().text(
+                egui::pos2(rect.right() - 10.0, rect.center().y),
+                egui::Align2::RIGHT_CENTER,
+                count.to_string(),
+                egui::TextStyle::Small.resolve(ui.style()),
+                palette.text_tertiary,
+            );
+        }
+    }
+    let response = response.on_hover_text(match count {
+        Some(count) => format!("{label} · {count}"),
+        None => label.to_owned(),
+    });
+    response
+        .widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, label));
+    response
 }

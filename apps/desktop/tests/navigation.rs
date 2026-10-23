@@ -5,8 +5,12 @@ use crane_desktop::view_state::{
     editor_measure, layout_mode, LayoutMode, COLLAPSED_NOTE_LIST_WIDTH, COLLAPSED_RAIL_WIDTH,
     EDITOR_MEASURE_MAX,
 };
+use crane_desktop::views::note_list::{metadata_chips, plain_excerpt, relative_time};
 use eframe::egui::accesskit::Role;
-use egui_kittest::{kittest::Queryable, Harness};
+use egui_kittest::{
+    kittest::{NodeT, Queryable},
+    Harness,
+};
 use std::time::{Duration, Instant};
 
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
@@ -98,6 +102,152 @@ fn create_note_focuses_title_and_layout_breakpoints_are_exact() {
     assert_eq!(layout_mode(719.0), LayoutMode::SinglePane);
     assert_eq!(editor_measure(900.0), EDITOR_MEASURE_MAX);
     assert_eq!(editor_measure(640.0), 608.0);
+}
+
+#[test]
+fn nordic_library_and_browser_present_hierarchy_and_bounded_metadata() {
+    let mut alpha = note(
+        "alpha",
+        "Alpha plan",
+        "# Project update\nThis **plain** excerpt stays readable. #work #urgent #third",
+        9_000,
+    );
+    alpha.pinned = true;
+    let chips = metadata_chips(&alpha);
+    let (app, _) = app(vec![alpha, note("beta", "Beta", "Second note", 8_000)]);
+    let harness = Harness::builder()
+        .with_size([1440.0, 900.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness.get_by_role_and_label(Role::Heading, "Crane");
+    harness.get_by_role_and_label(Role::Heading, "Notes browser");
+    harness.get_by_label("2 notes");
+    harness.get_by_role_and_label(Role::TextInput, "Search notes");
+    harness.get_by_role_and_label(Role::Button, "Quick Open");
+    let create = harness.get_by_role_and_label(Role::Button, "New note");
+    assert!(
+        (create.rect().width() - create.rect().height()).abs() < 2.0,
+        "New note must be the circular square accent control: {:?}",
+        create.rect()
+    );
+    assert_eq!(
+        harness
+            .get_by_role_and_label(Role::Button, "Notes")
+            .accesskit_node()
+            .toggled(),
+        Some(eframe::egui::accesskit::Toggled::True)
+    );
+    assert_eq!(
+        harness
+            .get_by_role_and_label(Role::Button, "Alpha plan")
+            .accesskit_node()
+            .toggled(),
+        Some(eframe::egui::accesskit::Toggled::True)
+    );
+
+    assert_eq!(chips.len(), 2);
+    assert_eq!(chips[0], "Pinned");
+    assert!(
+        plain_excerpt("# Hello **world** [site](https://example.com)").contains("Hello world site")
+    );
+    assert!(plain_excerpt(&"word ".repeat(100)).chars().count() <= 140);
+}
+
+#[test]
+fn relative_time_table_is_stable_and_future_safe() {
+    const MINUTE: u64 = 60_000;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+    let now = 1_700_000_000_000;
+    assert_eq!(relative_time(now, now), "now");
+    assert_eq!(relative_time(now - 5 * MINUTE, now), "5m");
+    assert_eq!(relative_time(now - 3 * HOUR, now), "3h");
+    assert_eq!(relative_time(now - 2 * DAY, now), "2d");
+    assert_eq!(relative_time(0, now), "1970-01-01");
+    assert_eq!(relative_time(now + DAY, now), "now");
+}
+
+#[test]
+fn empty_search_names_filter_and_can_recover() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1440.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness
+        .get_by_label("Search notes")
+        .set_text_value_accesskit("zzzzz");
+    settle(&mut harness);
+    harness.get_by_label("No notes match “zzzzz”");
+    harness
+        .get_by_role_and_label(Role::Button, "Clear search")
+        .click();
+    settle(&mut harness);
+    harness.get_by_role_and_label(Role::Button, "Alpha");
+}
+
+#[test]
+fn thousand_note_browser_only_builds_visible_rows_and_scrolls_to_late_note() {
+    let notes = (0..1_000)
+        .map(|index| {
+            note(
+                &format!("note-{index:04}"),
+                &format!("Note {index:04}"),
+                "A compact body excerpt",
+                index,
+            )
+        })
+        .collect();
+    let (app, _) = app(notes);
+    let mut harness = Harness::builder()
+        .with_size([1440.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let visible_rows = harness
+        .query_all_by_role(Role::Button)
+        .filter(|node| {
+            node.accesskit_node()
+                .label()
+                .is_some_and(|label| label.starts_with("Note "))
+        })
+        .count();
+    assert!(
+        (1..30).contains(&visible_rows),
+        "expected a virtualized window, found {visible_rows} note rows"
+    );
+
+    for _ in 0..70 {
+        let first_visible = harness
+            .query_all_by_role(Role::Button)
+            .find(|node| {
+                node.accesskit_node()
+                    .label()
+                    .is_some_and(|label| label.starts_with("Note "))
+            })
+            .expect("the virtualized list should keep a visible row");
+        first_visible.scroll_down();
+        harness.run();
+    }
+    let late = harness
+        .query_all_by_role(Role::Button)
+        .find(|node| {
+            let center_y = node.rect().center().y;
+            (180.0..700.0).contains(&center_y)
+                && node.accesskit_node().label().is_some_and(|label| {
+                    label
+                        .strip_prefix("Note ")
+                        .is_some_and(|number| number < "0950")
+                })
+        })
+        .expect("scrolling should render a later virtualized row");
+    let label = late.accesskit_node().label().unwrap().to_owned();
+    late.click();
+    settle(&mut harness);
+    let expected_id = format!("note-{}", label.trim_start_matches("Note "));
+    assert_eq!(
+        harness.state().selected_note_id(),
+        Some(expected_id.as_str())
+    );
 }
 
 #[test]
@@ -228,7 +378,7 @@ fn sidebar_shows_derived_collections_and_tag_hierarchy() {
     harness.get_by_label("Todos").click();
     settle(&mut harness);
     harness.get_by_label("Beta");
-    harness.get_by_label("Notes").click();
+    harness.get_by_role_and_label(Role::Button, "Notes").click();
     settle(&mut harness);
     harness.get_by_label("#project").click();
     settle(&mut harness);
@@ -246,16 +396,18 @@ fn focus_mode_hides_chrome_and_restores_selection() {
         .build_ui_state(|ui, app| app.show(ui), app);
     settle(&mut harness);
     let before = harness.state().selected_note_id().map(str::to_owned);
-    harness.get_by_label("Notes");
+    harness.get_by_role_and_label(Role::Button, "Notes");
 
     harness.get_by_label("Toggle focus mode").click();
     harness.run_steps(4);
-    assert!(harness.query_by_label("Notes").is_none());
+    assert!(harness
+        .query_by_role_and_label(Role::Button, "Notes")
+        .is_none());
     harness.get_by_role_and_label(Role::MultilineTextInput, "Note body");
 
     harness.get_by_label("Toggle focus mode").click();
     harness.run_steps(4);
-    harness.get_by_label("Notes");
+    harness.get_by_role_and_label(Role::Button, "Notes");
     assert_eq!(
         harness.state().selected_note_id().map(str::to_owned),
         before
@@ -271,7 +423,9 @@ fn escape_after_overlays_close_exits_focus_mode() {
     settle(&mut harness);
     harness.get_by_label("Toggle focus mode").click();
     harness.run_steps(2);
-    assert!(harness.query_by_label("Notes").is_none());
+    assert!(harness
+        .query_by_role_and_label(Role::Button, "Notes")
+        .is_none());
 
     harness.key_press_modifiers(eframe::egui::Modifiers::CTRL, eframe::egui::Key::O);
     harness.run_steps(4);
@@ -282,11 +436,13 @@ fn escape_after_overlays_close_exits_focus_mode() {
     assert!(harness
         .query_by_role_and_label(Role::TextInput, "Quick Open")
         .is_none());
-    assert!(harness.query_by_label("Notes").is_none());
+    assert!(harness
+        .query_by_role_and_label(Role::Button, "Notes")
+        .is_none());
 
     harness.key_press(eframe::egui::Key::Escape);
     harness.run_steps(4);
-    harness.get_by_label("Notes");
+    harness.get_by_role_and_label(Role::Button, "Notes");
 }
 
 fn editor_body_rect(width: f32) -> eframe::egui::Rect {
@@ -409,10 +565,10 @@ fn compact_mode_targets_are_at_least_44_points() {
     harness.get_by_label("Back to notes").click();
     harness.run_steps(2);
     assert_icon_target(&harness, "Quick Open", 44.0);
+    assert_icon_target(&harness, "New note", 44.0);
 
     harness.get_by_label("Open library").click();
     settle(&mut harness);
-    assert_icon_target(&harness, "New note", 44.0);
     harness.get_by_label("Collapse project").click();
     harness.run_steps(2);
     assert_icon_target(&harness, "Expand project", 44.0);

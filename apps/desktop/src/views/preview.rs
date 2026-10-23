@@ -51,6 +51,13 @@ pub fn show_with_opener(
                                 &mut action,
                             );
                         });
+                        heading.response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::Role::Heading,
+                                true,
+                                inline_text(content),
+                            )
+                        });
                         if scroll_to_anchor.is_some_and(|target| {
                             normalize_heading_anchor(&inline_text(content)) == target
                         }) {
