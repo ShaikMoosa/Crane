@@ -31,6 +31,8 @@ pub fn show_with_opener(
     scroll_to_anchor: Option<&str>,
 ) -> PreviewAction {
     let mut action = PreviewAction::None;
+    let choice = crate::theme::choice_for_context(ui.ctx());
+    let palette = crate::theme::tokens(choice);
     egui::ScrollArea::vertical()
         .id_salt("crane-markdown-preview")
         .show(ui, |ui| {
@@ -77,7 +79,7 @@ pub fn show_with_opener(
                     }
                     MarkdownBlock::Quote(content) => {
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new("❯").italics());
+                            ui.label(RichText::new("❯").color(palette.markdown_quote));
                             render_inlines(
                                 ui,
                                 content,
@@ -91,10 +93,16 @@ pub fn show_with_opener(
                         });
                     }
                     MarkdownBlock::Code { language, text } => {
-                        if let Some(language) = language {
-                            ui.small(language);
-                        }
-                        ui.monospace(text);
+                        egui::Frame::NONE
+                            .inner_margin(10)
+                            .fill(palette.markdown_code_background)
+                            .corner_radius(6)
+                            .show(ui, |ui| {
+                                if let Some(language) = language {
+                                    ui.small(language);
+                                }
+                                ui.monospace(text);
+                            });
                     }
                     MarkdownBlock::List { ordered, items } => {
                         for (index, item) in items.iter().enumerate() {

@@ -16,38 +16,43 @@ pub fn show(
 ) -> RestoreAction {
     let modal_id = egui::Id::unique("crane-restore-confirmation");
     let area = egui::Modal::default_area(modal_id).accessible_name("Restore Crane backup");
-    let response = egui::Modal::new(modal_id).area(area).show(context, |ui| {
-        ui.heading("Restore Crane backup");
-        ui.label(format!(
-            "Backup date: {}",
-            format_timestamp_millis(model.inspection.created_at)
-        ));
-        ui.label(format!(
-            "{} total · {} active · {} archived · {} trash",
-            model.inspection.total,
-            model.inspection.active,
-            model.inspection.archived,
-            model.inspection.trashed
-        ));
-        ui.separator();
-        ui.label("This replaces the current Crane library after a safety backup is written.");
-        if model.restoring {
-            ui.label("Writing safety backup and replacing the library…");
-        }
-        ui.horizontal(|ui| {
-            let cancel = ui
-                .add_enabled(!model.restoring, egui::Button::new("Cancel"))
-                .accessible_name("Cancel restore");
-            if request_cancel_focus && !model.restoring {
-                cancel.request_focus();
+    let choice = crate::theme::choice_for_context(context);
+    let response = egui::Modal::new(modal_id)
+        .area(area)
+        .frame(crate::theme::overlay_frame(choice))
+        .backdrop_color(crate::theme::modal_backdrop(choice))
+        .show(context, |ui| {
+            ui.heading("Restore Crane backup");
+            ui.label(format!(
+                "Backup date: {}",
+                format_timestamp_millis(model.inspection.created_at)
+            ));
+            ui.label(format!(
+                "{} total · {} active · {} archived · {} trash",
+                model.inspection.total,
+                model.inspection.active,
+                model.inspection.archived,
+                model.inspection.trashed
+            ));
+            ui.separator();
+            ui.label("This replaces the current Crane library after a safety backup is written.");
+            if model.restoring {
+                ui.label("Writing safety backup and replacing the library…");
             }
-            let replace = ui
-                .add_enabled(!model.restoring, egui::Button::new("Replace library"))
-                .accessible_name("Replace library");
-            (cancel.clicked(), replace.clicked())
-        })
-        .inner
-    });
+            ui.horizontal(|ui| {
+                let cancel = ui
+                    .add_enabled(!model.restoring, egui::Button::new("Cancel"))
+                    .accessible_name("Cancel restore");
+                if request_cancel_focus && !model.restoring {
+                    cancel.request_focus();
+                }
+                let replace = ui
+                    .add_enabled(!model.restoring, egui::Button::new("Replace library"))
+                    .accessible_name("Replace library");
+                (cancel.clicked(), replace.clicked())
+            })
+            .inner
+        });
 
     if response.inner.1 {
         RestoreAction::Confirm

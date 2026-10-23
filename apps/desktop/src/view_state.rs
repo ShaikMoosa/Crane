@@ -45,6 +45,14 @@ pub fn inspector_presentation(editor_pane_points: f32) -> InspectorPresentation 
     }
 }
 
+pub fn focus_transition_seconds(reduced_motion: bool) -> f32 {
+    if reduced_motion {
+        0.0
+    } else {
+        0.18
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ViewState {
     pub collection: CollectionView,

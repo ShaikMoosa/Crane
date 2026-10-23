@@ -12,9 +12,9 @@ use crate::sidebar::{SidebarIntent, SidebarState, SidebarView};
 use crate::theme;
 use crate::transfers::{TransferController, TransferEffect, TransferState};
 use crate::view_state::{
-    editor_measure, inspector_presentation, layout_mode, InspectorPresentation, LayoutMode,
-    ViewState, COLLAPSED_NOTE_LIST_WIDTH, COLLAPSED_RAIL_WIDTH, INSPECTOR_WIDTH, NOTE_LIST_WIDTH,
-    RAIL_WIDTH,
+    editor_measure, focus_transition_seconds, inspector_presentation, layout_mode,
+    InspectorPresentation, LayoutMode, ViewState, COLLAPSED_NOTE_LIST_WIDTH, COLLAPSED_RAIL_WIDTH,
+    INSPECTOR_WIDTH, NOTE_LIST_WIDTH, RAIL_WIDTH,
 };
 use crate::views::{editor, library, note_list, restore};
 use crate::worker::{spawn_worker, WorkerHandle, WorkerOutcome, WorkerRequest, WorkerResult};
@@ -270,10 +270,15 @@ impl CraneApp {
         // Breakpoints describe the window viewport, not the central panel after
         // egui has subtracted its default inner margin.
         let mode = layout_mode(ui.ctx().viewport_rect().width());
-        if self.view.focus_mode {
-            theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
-            self.show_editor(ui);
-        } else if mode == LayoutMode::SinglePane {
+        let focus_amount = ui.ctx().animate_bool_with_time(
+            egui::Id::unique("crane-focus-mode-transition"),
+            self.view.focus_mode,
+            focus_transition_seconds(self.settings.value().reduced_motion),
+        );
+        if focus_amount > f32::EPSILON {
+            self.inspector_floating = false;
+        }
+        if mode == LayoutMode::SinglePane && focus_amount <= f32::EPSILON {
             match self.mobile_pane {
                 MobilePane::Library => {
                     theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
@@ -294,51 +299,75 @@ impl CraneApp {
                     self.show_editor(ui);
                 }
             }
+        } else if mode == LayoutMode::SinglePane {
+            theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
+            self.show_editor_centered(ui);
         } else {
             let pane_height = ui.available_height();
+            let chrome_factor = (1.0 - focus_amount).clamp(0.0, 1.0);
             ui.horizontal(|ui| {
-                let rail_width = if mode == LayoutMode::Wide {
+                let rail_width = (if mode == LayoutMode::Wide {
                     RAIL_WIDTH
                 } else {
                     COLLAPSED_RAIL_WIDTH
-                };
-                ui.allocate_ui_with_layout(
-                    egui::vec2(rail_width, pane_height),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        theme::paint_pane(ui, theme::PaneKind::Rail, self.settings.value().theme);
-                        self.show_library(
-                            ui,
-                            mode == LayoutMode::CollapsedRail,
-                            request_data_focus,
-                        );
-                    },
-                );
-                ui.separator();
-                let list_width = if mode == LayoutMode::Wide {
+                }) * chrome_factor;
+                if rail_width >= 1.0 {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(rail_width, pane_height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_opacity(chrome_factor);
+                            if focus_amount > f32::EPSILON {
+                                ui.disable();
+                            }
+                            theme::paint_pane(
+                                ui,
+                                theme::PaneKind::Rail,
+                                self.settings.value().theme,
+                            );
+                            self.show_library(
+                                ui,
+                                mode == LayoutMode::CollapsedRail,
+                                request_data_focus,
+                            );
+                        },
+                    );
+                    ui.separator();
+                }
+                let list_width = (if mode == LayoutMode::Wide {
                     NOTE_LIST_WIDTH
                 } else {
                     COLLAPSED_NOTE_LIST_WIDTH
-                };
-                ui.allocate_ui_with_layout(
-                    egui::vec2(list_width, pane_height),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        theme::paint_pane(
-                            ui,
-                            theme::PaneKind::NoteList,
-                            self.settings.value().theme,
-                        );
-                        self.show_note_list(ui);
-                    },
-                );
-                ui.separator();
+                }) * chrome_factor;
+                if list_width >= 1.0 {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(list_width, pane_height),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_opacity(chrome_factor);
+                            if focus_amount > f32::EPSILON {
+                                ui.disable();
+                            }
+                            theme::paint_pane(
+                                ui,
+                                theme::PaneKind::NoteList,
+                                self.settings.value().theme,
+                            );
+                            self.show_note_list(ui);
+                        },
+                    );
+                    ui.separator();
+                }
                 ui.allocate_ui_with_layout(
                     ui.available_size(),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         theme::paint_pane(ui, theme::PaneKind::Editor, self.settings.value().theme);
-                        self.show_editor(ui);
+                        if focus_amount > f32::EPSILON {
+                            self.show_editor_centered(ui);
+                        } else {
+                            self.show_editor(ui);
+                        }
                     },
                 );
             });
@@ -814,6 +843,7 @@ impl CraneApp {
             if self.inspector_floating {
                 egui::Window::new("Inspector")
                     .id(egui::Id::unique("inspector-float"))
+                    .frame(theme::overlay_frame(self.settings.value().theme))
                     .anchor(egui::Align2::RIGHT_TOP, [-16.0, 16.0])
                     .default_size([INSPECTOR_WIDTH, 480.0])
                     .show(ui.ctx(), |ui| self.show_inspector(ui));
@@ -980,7 +1010,11 @@ impl CraneApp {
             self.inspector.open = !self.inspector.open;
         }
         if actions.toggle_focus_mode {
+            let exiting = self.view.focus_mode;
             self.view.focus_mode = !self.view.focus_mode;
+            if exiting {
+                self.request_body_focus = true;
+            }
         }
         if mutation_enabled && actions.export_note {
             self.begin_transfer(Command::ExportNote {
@@ -1581,6 +1615,7 @@ impl CraneApp {
         }
         if self.view.focus_mode {
             self.view.focus_mode = false;
+            self.request_body_focus = true;
             return;
         }
         let target = match self.mobile_pane {

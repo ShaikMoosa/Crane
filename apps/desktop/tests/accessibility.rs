@@ -184,6 +184,19 @@ fn connected_knowledge_controls_have_accessible_names() {
 }
 
 #[test]
+fn transient_surfaces_expose_named_dismiss_controls() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness.key_press_modifiers(eframe::egui::Modifiers::CTRL, Key::O);
+    harness.run_steps(4);
+    harness.get_by_role_and_label(Role::TextInput, "Quick Open");
+    harness.get_by_role_and_label(Role::Button, "Close Quick Open");
+}
+
+#[test]
 fn tab_traversal_reaches_formatting_and_inspector_in_order() {
     let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
     let mut harness = Harness::builder()

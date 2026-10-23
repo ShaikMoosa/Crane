@@ -197,8 +197,11 @@ pub fn show_chooser(
     }
     let mut intent = None;
     let mut close_requested = false;
-    eframe::egui::Window::new("wiki-link-chooser")
-        .title_bar(true)
+    eframe::egui::Window::new("Choose link target")
+        .title_bar(false)
+        .frame(crate::theme::overlay_frame(
+            crate::theme::choice_for_context(ctx),
+        ))
         .collapsible(false)
         .resizable(false)
         .anchor(eframe::egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -208,7 +211,25 @@ pub fn show_chooser(
             }) {
                 close_requested = true;
             }
-            ui.heading("Choose link target");
+            ui.horizontal(|ui| {
+                ui.heading("Choose link target");
+                ui.with_layout(
+                    eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
+                    |ui| {
+                        if crate::icons::icon_button(
+                            ui,
+                            crate::icons::IconId::X,
+                            "Close link chooser",
+                            "Close link chooser",
+                        )
+                        .clicked()
+                        {
+                            close_requested = true;
+                        }
+                    },
+                );
+            });
+            ui.separator();
             if state.candidates.is_empty() {
                 ui.label(format!("No note titled \"{}\".", state.title));
                 if ui

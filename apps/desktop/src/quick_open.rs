@@ -59,12 +59,31 @@ pub fn show(
     }
     let mut intent = None;
     let mut close_requested = false;
-    egui::Window::new("quick-open-overlay")
+    egui::Window::new("Quick Open")
         .title_bar(false)
+        .frame(crate::theme::overlay_frame(
+            crate::theme::choice_for_context(ctx),
+        ))
         .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
         .min_width(480.0)
         .max_width(560.0)
         .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading("Quick Open");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if crate::icons::icon_button(
+                        ui,
+                        crate::icons::IconId::X,
+                        "Close Quick Open",
+                        "Close Quick Open",
+                    )
+                    .clicked()
+                    {
+                        close_requested = true;
+                    }
+                });
+            });
+            ui.separator();
             if state.needs_initial_query {
                 state.needs_initial_query = false;
                 request(state, on_query);

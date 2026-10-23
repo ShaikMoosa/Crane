@@ -68,6 +68,7 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
     let mut picked = None;
     egui::Popup::menu(&data)
         .open_bool(data_menu_open)
+        .frame(crate::theme::menu_frame(theme))
         .show(|ui| {
             for (label, action) in [
                 ("Import Markdown…", DataAction::ImportMarkdown),

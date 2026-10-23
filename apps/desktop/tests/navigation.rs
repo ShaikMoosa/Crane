@@ -13,6 +13,10 @@ use egui_kittest::{
 };
 use std::time::{Duration, Instant};
 
+fn brightness(color: eframe::egui::Color32) -> u16 {
+    u16::from(color.r()) + u16::from(color.g()) + u16::from(color.b())
+}
+
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
@@ -423,6 +427,55 @@ fn focus_mode_hides_chrome_and_restores_selection() {
 }
 
 #[test]
+fn focus_mode_restores_inspector_tab_and_body_focus() {
+    let (app, _) = app(vec![note("a", "Alpha", "See [[Alpha]]", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1440.0, 900.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Note information").click();
+    harness.run_steps(3);
+    harness.get_by_label("Links").click();
+    harness.run_steps(2);
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run_steps(16);
+    assert!(harness.query_by_label("Inspector").is_none());
+
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run_steps(16);
+    harness.get_by_role_and_label(Role::Window, "Inspector");
+    assert_eq!(
+        harness.get_by_label("Links").accesskit_node().toggled(),
+        Some(eframe::egui::accesskit::Toggled::True)
+    );
+    assert!(harness.get_by_label("Note body").is_focused());
+}
+
+#[test]
+fn focus_transition_respects_reduced_motion() {
+    assert_eq!(
+        crane_desktop::view_state::focus_transition_seconds(false),
+        0.18
+    );
+    assert_eq!(
+        crane_desktop::view_state::focus_transition_seconds(true),
+        0.0
+    );
+
+    let (app, _) = app(vec![note("a", "Alpha", "body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1000.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    harness.get_by_label("Reduce motion").click();
+    harness.run_steps(2);
+    harness.get_by_label("Toggle focus mode").click();
+    harness.run();
+    assert!(harness
+        .query_by_role_and_label(Role::Button, "Notes")
+        .is_none());
+}
+
+#[test]
 fn escape_after_overlays_close_exits_focus_mode() {
     let (app, _) = app(vec![note("a", "Alpha", "first", 3)]);
     let mut harness = Harness::builder()
@@ -591,5 +644,17 @@ fn light_and_dark_palettes_keep_three_distinct_materials() {
         let colors = crane_desktop::theme::pane_colors(choice);
         assert_ne!(colors.rail, colors.note_list);
         assert_ne!(colors.note_list, colors.editor);
+        assert!(brightness(colors.editor) > brightness(colors.rail));
+        assert!(brightness(colors.rail) > brightness(colors.note_list));
+
+        let overlay = crane_desktop::theme::overlay_frame(choice);
+        let menu = crane_desktop::theme::menu_frame(choice);
+        let tokens = crane_desktop::theme::tokens(choice);
+        assert_eq!(overlay.fill, tokens.editor_background);
+        assert_eq!(menu.fill, tokens.surface_selected);
+        assert_eq!(overlay.stroke.color, tokens.rule_strong);
+        assert!(overlay.corner_radius.nw >= 8);
+        assert!(overlay.shadow.blur > 0);
+        assert!(menu.shadow.blur > 0);
     }
 }

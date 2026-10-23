@@ -34,6 +34,7 @@ fn quick_open_finds_and_opens_second_hit() {
         .build_ui_state(|ui, app| app.show(ui), app);
     settle(&mut harness);
     open_overlay(&mut harness);
+    harness.get_by_role_and_label(Role::Button, "Close Quick Open");
     harness
         .get_by_role_and_label(Role::TextInput, "Quick Open")
         .set_text_value_accesskit("a");

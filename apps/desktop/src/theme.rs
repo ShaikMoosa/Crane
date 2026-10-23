@@ -1,6 +1,7 @@
 use crane_storage::ThemeChoice;
 use eframe::egui::{
-    self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle,
+    self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame, Shadow,
+    Stroke, TextStyle,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -78,8 +79,8 @@ pub fn tokens(choice: ThemeChoice) -> ThemeTokens {
         ThemeChoice::Dark => ThemeTokens {
             shell_background: Color32::from_rgb(21, 23, 25),
             rail_background: Color32::from_rgb(35, 38, 40),
-            list_background: Color32::from_rgb(42, 45, 48),
-            editor_background: Color32::from_rgb(27, 29, 31),
+            list_background: Color32::from_rgb(29, 32, 34),
+            editor_background: Color32::from_rgb(43, 46, 48),
             surface_hover: Color32::from_rgb(52, 56, 59),
             surface_selected: Color32::from_rgb(59, 63, 66),
             surface_pressed: Color32::from_rgb(69, 73, 77),
@@ -107,6 +108,57 @@ pub fn tokens(choice: ThemeChoice) -> ThemeTokens {
             markdown_code: Color32::from_rgb(223, 227, 231),
             markdown_code_background: Color32::from_rgb(37, 41, 44),
         },
+    }
+}
+
+pub fn choice_for_context(context: &egui::Context) -> ThemeChoice {
+    if context.theme() == egui::Theme::Dark {
+        ThemeChoice::Dark
+    } else {
+        ThemeChoice::Light
+    }
+}
+
+fn elevation(choice: ThemeChoice) -> Shadow {
+    let color = match choice {
+        ThemeChoice::Light => Color32::from_black_alpha(38),
+        ThemeChoice::Dark => Color32::from_black_alpha(92),
+    };
+    Shadow {
+        offset: [0, 8],
+        blur: 24,
+        spread: 0,
+        color,
+    }
+}
+
+/// Shared frame for sheets and dialogs. Elevation is reserved for transient
+/// surfaces so the persistent three-pane shell stays visually quiet.
+pub fn overlay_frame(choice: ThemeChoice) -> Frame {
+    let palette = tokens(choice);
+    Frame::NONE
+        .inner_margin(16)
+        .fill(palette.editor_background)
+        .stroke(Stroke::new(1.0, palette.rule_strong))
+        .corner_radius(10)
+        .shadow(elevation(choice))
+}
+
+/// Compact transient frame for menus and inline completion popups.
+pub fn menu_frame(choice: ThemeChoice) -> Frame {
+    let palette = tokens(choice);
+    Frame::NONE
+        .inner_margin(8)
+        .fill(palette.surface_selected)
+        .stroke(Stroke::new(1.0, palette.rule))
+        .corner_radius(8)
+        .shadow(elevation(choice))
+}
+
+pub fn modal_backdrop(choice: ThemeChoice) -> Color32 {
+    match choice {
+        ThemeChoice::Light => Color32::from_black_alpha(72),
+        ThemeChoice::Dark => Color32::from_black_alpha(128),
     }
 }
 

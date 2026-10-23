@@ -152,6 +152,7 @@ pub fn show(
         let mut picked = None;
         egui::Popup::menu(&note_actions)
             .open_bool(note_actions_open)
+            .frame(crate::theme::menu_frame(theme))
             .show(|ui| {
                 ui.set_min_width(176.0);
                 for (label, action) in [
@@ -354,7 +355,7 @@ fn show_body(
         egui::Area::new(egui::Id::unique("completion-popup"))
             .fixed_pos(anchor)
             .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                crate::theme::menu_frame(theme).show(ui, |ui| {
                     ui.set_min_width(240.0);
                     for (index, candidate) in view.state.candidates.iter().enumerate() {
                         let text = candidate.insert_text().to_owned();
@@ -386,6 +387,10 @@ fn show_body(
         let live_range = TextEditState::load(ui.ctx(), response_id)
             .and_then(|state| state.cursor.char_range())
             .map(|range| (range.primary.index.0, range.secondary.index.0));
+        format_view
+            .state
+            .sync_active(&draft.current().body, live_range);
+        let link_was_open = format_view.state.link_open;
         if let Some(action) = crate::formatting::show(ui, format_view.state, mutations_enabled) {
             let selected = match live_range {
                 Some((a, b)) if a != b => (a, b),
@@ -399,6 +404,9 @@ fn show_body(
                 &action,
                 &body_response,
             );
+        }
+        if link_was_open && !format_view.state.link_open {
+            body_response.request_focus();
         }
         format_view.state.last_char_range = live_range;
     }

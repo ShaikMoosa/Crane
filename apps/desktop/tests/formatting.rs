@@ -2,7 +2,10 @@ mod common;
 
 use common::{app, note};
 use eframe::egui::accesskit::Role;
-use egui_kittest::{kittest::Queryable, Harness};
+use egui_kittest::{
+    kittest::{NodeT, Queryable},
+    Harness,
+};
 use std::time::{Duration, Instant};
 
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
@@ -52,6 +55,11 @@ fn formatting_bold_wraps_selection_and_saves() {
     harness.get_by_label("Bold").click();
     harness.run_steps(4);
     assert_eq!(harness.state().selected_draft().unwrap().body, "**hello**");
+    assert_eq!(
+        harness.get_by_label("Bold").accesskit_node().toggled(),
+        Some(eframe::egui::accesskit::Toggled::True),
+        "active formatting must be exposed structurally, not only by color"
+    );
 
     harness.get_by_label("Preview Markdown").click();
     harness.run_steps(2);
@@ -64,6 +72,26 @@ fn formatting_bold_wraps_selection_and_saves() {
         store.notes.iter().find(|note| note.id == "a").unwrap().body,
         "**hello**"
     );
+}
+
+#[test]
+fn link_dialog_has_named_controls_and_escape_restores_the_editor() {
+    let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Insert link").click();
+    harness.run_steps(2);
+
+    harness.get_by_role_and_label(Role::TextInput, "Link URL");
+    harness.get_by_role_and_label(Role::Button, "Insert link address");
+    harness.get_by_role_and_label(Role::Button, "Cancel link insertion");
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(2);
+
+    assert!(harness.query_by_label("Link URL").is_none());
+    assert!(harness.get_by_label("Note body").is_focused());
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use crate::icons::{icon_button, IconId};
+use crate::icons::IconId;
 use eframe::egui;
 use std::ops::Range;
 
@@ -24,6 +24,20 @@ pub struct FormatOutcome {
     pub applied: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FormattingKind {
+    Heading,
+    Task,
+    BulletList,
+    NumberedList,
+    Quote,
+    Bold,
+    Italic,
+    InlineCode,
+    CodeBlock,
+    Link,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FormattingState {
     pub link_open: bool,
@@ -32,6 +46,85 @@ pub struct FormattingState {
     /// collapses the widget selection on the click frame, so actions fall
     /// back to this when the live range is collapsed.
     pub last_char_range: Option<(usize, usize)>,
+    active: Vec<FormattingKind>,
+}
+
+impl FormattingState {
+    pub fn sync_active(&mut self, body: &str, char_range: Option<(usize, usize)>) {
+        self.active.clear();
+        let Some((first, second)) = char_range else {
+            return;
+        };
+        let first = char_to_byte(body, first);
+        let second = char_to_byte(body, second);
+        let (start, end) = (first.min(second), first.max(second));
+        let line_start = body[..start].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = body[end..]
+            .find('\n')
+            .map_or(body.len(), |index| end + index);
+        let line = &body[line_start..line_end];
+        if strip_atx(line).is_some() {
+            self.active.push(FormattingKind::Heading);
+        }
+        if task_marker_len(line).is_some() {
+            self.active.push(FormattingKind::Task);
+        } else if line.starts_with("- ") {
+            self.active.push(FormattingKind::BulletList);
+        }
+        if ordered_marker_len(line).is_some() {
+            self.active.push(FormattingKind::NumberedList);
+        }
+        if line.starts_with("> ") {
+            self.active.push(FormattingKind::Quote);
+        }
+        if surrounded_by(body, start, end, "**") {
+            self.active.push(FormattingKind::Bold);
+        } else if surrounded_by(body, start, end, "*") {
+            self.active.push(FormattingKind::Italic);
+        }
+        if surrounded_by(body, start, end, "`") {
+            self.active.push(FormattingKind::InlineCode);
+        }
+        if body[..line_start].ends_with("```\n") && body[line_end..].starts_with("\n```") {
+            self.active.push(FormattingKind::CodeBlock);
+        }
+        if self.link_open {
+            self.active.push(FormattingKind::Link);
+        }
+    }
+
+    fn is_active(&self, kind: FormattingKind) -> bool {
+        self.active.contains(&kind) || (kind == FormattingKind::Link && self.link_open)
+    }
+}
+
+fn char_to_byte(text: &str, char_index: usize) -> usize {
+    text.char_indices()
+        .map(|(byte, _)| byte)
+        .chain(std::iter::once(text.len()))
+        .nth(char_index)
+        .unwrap_or(text.len())
+}
+
+fn surrounded_by(body: &str, start: usize, end: usize, marker: &str) -> bool {
+    start >= marker.len() && body[..start].ends_with(marker) && body[end..].starts_with(marker)
+}
+
+impl FormatAction {
+    fn kind(&self) -> FormattingKind {
+        match self {
+            Self::Heading(_) => FormattingKind::Heading,
+            Self::Task => FormattingKind::Task,
+            Self::BulletList => FormattingKind::BulletList,
+            Self::NumberedList => FormattingKind::NumberedList,
+            Self::Quote => FormattingKind::Quote,
+            Self::Bold => FormattingKind::Bold,
+            Self::Italic => FormattingKind::Italic,
+            Self::InlineCode => FormattingKind::InlineCode,
+            Self::CodeBlock => FormattingKind::CodeBlock,
+            Self::InsertLink { .. } => FormattingKind::Link,
+        }
+    }
 }
 
 fn clamp_boundary(body: &str, index: usize) -> usize {
@@ -342,11 +435,21 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
             (IconId::Code, "Code block", FormatAction::CodeBlock),
         ];
         for (icon, name, candidate) in picks {
-            if icon_button(ui, icon, name, name).clicked() && enabled {
+            if formatting_button(ui, icon, name, state.is_active(candidate.kind())).clicked()
+                && enabled
+            {
                 action = Some(candidate);
             }
         }
-        if icon_button(ui, IconId::Link, "Insert link", "Insert link").clicked() && enabled {
+        if formatting_button(
+            ui,
+            IconId::Link,
+            "Insert link",
+            state.is_active(FormattingKind::Link),
+        )
+        .clicked()
+            && enabled
+        {
             state.link_open = true;
             state.link_url.clear();
         }
@@ -356,6 +459,9 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
             .title_bar(false)
             .resizable(false)
             .collapsible(false)
+            .frame(crate::theme::overlay_frame(
+                crate::theme::choice_for_context(ui.ctx()),
+            ))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ui.ctx(), |ui| {
                 if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
@@ -370,19 +476,46 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
                 )
                 .accessible_name("Link URL");
                 ui.horizontal(|ui| {
-                    if ui.button("Insert").clicked() {
+                    if ui
+                        .button("Insert")
+                        .accessible_name("Insert link address")
+                        .clicked()
+                    {
                         action = Some(FormatAction::InsertLink {
                             url: state.link_url.clone(),
                         });
                         state.link_open = false;
                     }
-                    if ui.button("Cancel").clicked() {
+                    if ui
+                        .button("Cancel")
+                        .accessible_name("Cancel link insertion")
+                        .clicked()
+                    {
                         state.link_open = false;
                     }
                 });
             });
     }
     action
+}
+
+fn formatting_button(
+    ui: &mut egui::Ui,
+    icon: IconId,
+    accessible_name: &str,
+    selected: bool,
+) -> egui::Response {
+    let image = crate::icons::icon_for_text_button(ui, icon, ui.visuals().text_color());
+    let edge = crate::icons::target_size(ui);
+    let response = ui
+        .add_sized([edge, edge], egui::Button::image(image).selected(selected))
+        .accessible_name(accessible_name)
+        .on_hover_text(accessible_name);
+    let enabled = ui.is_enabled();
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::Button, enabled, selected, accessible_name)
+    });
+    response
 }
 
 #[cfg(test)]
