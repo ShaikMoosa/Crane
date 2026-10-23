@@ -53,6 +53,8 @@ fn native_navigation_searches_filters_and_changes_note_state() {
 
     harness.get_by_label("Alpha plan").click();
     harness.run();
+    harness.get_by_label("Note actions").click();
+    harness.run();
     harness.get_by_label("Pin note").click();
     settle(&mut harness);
     harness.get_by_label("Pinned").click();
@@ -61,6 +63,8 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness.get_by_label("Alpha plan").click();
     harness.run();
 
+    harness.get_by_label("Note actions").click();
+    harness.run();
     harness.get_by_label("Archive note").click();
     settle(&mut harness);
     harness.get_by_label("Archive").click();
@@ -69,12 +73,16 @@ fn native_navigation_searches_filters_and_changes_note_state() {
     harness.get_by_label("Alpha plan").click();
     harness.run();
 
+    harness.get_by_label("Note actions").click();
+    harness.run();
     harness.get_by_label("Move to Trash").click();
     settle(&mut harness);
     harness.get_by_label("Trash").click();
     settle(&mut harness);
     harness.get_by_label("Alpha plan");
     harness.get_by_label("Alpha plan").click();
+    harness.run();
+    harness.get_by_label("Note actions").click();
     harness.run();
     harness.get_by_label("Restore note").click();
     settle(&mut harness);

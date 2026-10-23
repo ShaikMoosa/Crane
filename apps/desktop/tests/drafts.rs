@@ -1,5 +1,5 @@
 use crane_application::{CommandData, CommandResult, ErrorCode};
-use crane_desktop::draft::{Draft, DraftCoordinator, SAVE_DELAY_MILLIS};
+use crane_desktop::draft::{Draft, DraftCoordinator, SavePresentation, SAVE_DELAY_MILLIS};
 
 fn draft(id: &str, body: &str, revision: u64, acknowledged_revision: u64) -> Draft {
     Draft {
@@ -9,6 +9,25 @@ fn draft(id: &str, body: &str, revision: u64, acknowledged_revision: u64) -> Dra
         revision,
         acknowledged_revision,
     }
+}
+
+#[test]
+fn save_presentation_tracks_clean_pending_and_failed_states() {
+    let mut editor = DraftCoordinator::new(draft("a", "saved", 2, 2));
+    assert_eq!(editor.save_presentation(), SavePresentation::Saved);
+
+    editor.edit("Title a".into(), "dirty".into(), 10);
+    assert_eq!(editor.save_presentation(), SavePresentation::Saving);
+
+    editor.save_now();
+    let request = editor.take_ready_request(10).expect("queued save");
+    assert_eq!(editor.save_presentation(), SavePresentation::Saving);
+
+    editor.complete_failure(
+        request.request_id,
+        crane_application::AppError::new(ErrorCode::Io, "disk full"),
+    );
+    assert_eq!(editor.save_presentation(), SavePresentation::Failed);
 }
 
 #[test]

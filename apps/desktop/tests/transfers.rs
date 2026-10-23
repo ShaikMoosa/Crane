@@ -256,6 +256,8 @@ fn selected_trashed_notes_can_export() {
     harness.run();
     harness.get_by_label("Discarded draft").click();
     harness.run();
+    harness.get_by_label("Note actions").click();
+    harness.run();
     harness.get_by_label("Export note").click();
     settle(&mut harness);
 
@@ -288,6 +290,23 @@ fn delayed_import_blocks_typing_create_and_archive_until_refresh() {
         .get_by_role_and_label(Role::MultilineTextInput, "Note body")
         .set_text_value_accesskit("Must not apply");
     harness.get_by_label("New note").click();
+    harness.get_by_label("Note actions").click();
+    harness.run();
+    for label in [
+        "Pin note",
+        "Archive note",
+        "Move to Trash",
+        "Export note",
+        "Save now",
+    ] {
+        assert!(
+            harness
+                .get_by_role_and_label(Role::Button, label)
+                .accesskit_node()
+                .is_disabled(),
+            "{label} stayed enabled during a transfer"
+        );
+    }
     harness.get_by_label("Archive note").click();
     harness.run();
     let body_while_blocked = harness.state().selected_draft().unwrap().body.clone();

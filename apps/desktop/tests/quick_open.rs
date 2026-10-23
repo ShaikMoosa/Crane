@@ -80,6 +80,8 @@ fn quick_open_visible_control_and_archived_toggle() {
     settle(&mut harness);
     harness.get_by_label("Gamma archive").click();
     settle(&mut harness);
+    harness.get_by_label("Note actions").click();
+    harness.run();
     harness.get_by_label("Archive note").click();
     settle(&mut harness);
     harness.get_by_label("Quick Open").click();

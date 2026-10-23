@@ -3,7 +3,10 @@ mod common;
 use common::{app, note};
 use eframe::egui::accesskit::Role;
 use eframe::egui::{Key, Modifiers};
-use egui_kittest::{kittest::Queryable, Harness};
+use egui_kittest::{
+    kittest::{NodeT, Queryable},
+    Harness,
+};
 use std::time::{Duration, Instant};
 
 fn settle(harness: &mut Harness<'_, crane_desktop::app::CraneApp>) {
@@ -148,6 +151,89 @@ fn editor_widget_ids_are_scoped_to_note_and_field() {
 }
 
 #[test]
+fn editor_toolbar_keeps_secondary_actions_in_an_accessible_menu() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    for label in ["Toggle focus mode", "Preview Markdown", "Note information"] {
+        harness.get_by_role_and_label(Role::Button, label);
+    }
+    harness.get_by_label("Saved");
+    for label in [
+        "Pin note",
+        "Archive note",
+        "Move to Trash",
+        "Export note",
+        "Save now",
+    ] {
+        assert!(
+            harness.query_by_label(label).is_none(),
+            "{label} leaked into the toolbar"
+        );
+    }
+
+    let disclosure = harness.get_by_role_and_label(Role::DisclosureTriangle, "Note actions");
+    assert_eq!(
+        disclosure.accesskit_node().data().is_expanded(),
+        Some(false)
+    );
+    disclosure.click();
+    harness.run();
+
+    let disclosure = harness.get_by_role_and_label(Role::DisclosureTriangle, "Note actions");
+    assert_eq!(disclosure.accesskit_node().data().is_expanded(), Some(true));
+    for label in [
+        "Pin note",
+        "Archive note",
+        "Move to Trash",
+        "Export note",
+        "Save now",
+    ] {
+        let action = harness.get_by_role_and_label(Role::Button, label);
+        assert!(
+            action.rect().width() >= 44.0 && action.rect().height() >= 44.0,
+            "{label} was smaller than a 44-point menu target: {:?}",
+            action.rect()
+        );
+    }
+}
+
+#[test]
+fn escape_closes_note_actions_and_restores_body_focus() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness.get_by_label("Note actions").click();
+    harness.run();
+    harness.key_press(Key::Escape);
+    harness.run_steps(2);
+
+    assert!(harness.query_by_label("Pin note").is_none());
+    assert!(harness.get_by_label("Note body").is_focused());
+}
+
+#[test]
+fn save_feedback_moves_from_saved_to_saving_without_a_primary_save_button() {
+    let (app, _) = app(vec![note("alpha", "Alpha", "Body", 1)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    harness.get_by_label("Saved");
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .set_text_value_accesskit("Changed body");
+    harness.run_steps(2);
+
+    harness.get_by_label("Saving");
+    assert!(harness.query_by_label("Save now").is_none());
+}
+
+#[test]
 fn save_failure_retry_is_visible_above_the_editor_body() {
     let (mut app, committed) = app(vec![note("alpha", "Alpha", "Old", 1)]);
     app.edit_selected_for_test("Alpha", "Keep this draft");
@@ -157,6 +243,7 @@ fn save_failure_retry_is_visible_above_the_editor_body() {
         .build_ui_state(|ui, app| app.show(ui), app);
 
     harness.get_by_label("disk full");
+    harness.get_by_label("Save failed");
     harness.get_by_label("New note").click();
     harness.run();
     assert_eq!(harness.state().selected_note_id(), Some("alpha"));

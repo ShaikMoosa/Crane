@@ -1,4 +1,4 @@
-use crate::draft::DraftCoordinator;
+use crate::draft::{DraftCoordinator, SavePresentation};
 use crate::formatting::FormattingState;
 use crate::icons::{icon_button, IconId};
 use crate::knowledge_navigation::{byte_to_char, char_to_byte, CompletionState, WikiFragment};
@@ -60,6 +60,7 @@ pub struct EditorView<'a> {
     pub caret_jump: Option<usize>,
     pub status: Option<&'a str>,
     pub mutations_enabled: bool,
+    pub note_actions_open: &'a mut bool,
     pub completion: Option<CompletionView<'a>>,
     pub formatting: Option<FormattingView<'a>>,
 }
@@ -79,6 +80,7 @@ pub fn show(
         caret_jump,
         status,
         mutations_enabled,
+        note_actions_open,
         mut completion,
         mut formatting,
     } = view;
@@ -92,28 +94,6 @@ pub fn show(
             "Toggle focus mode",
         )
         .clicked();
-        let pin_name = if flags.pinned {
-            "Unpin note"
-        } else {
-            "Pin note"
-        };
-        actions.toggle_pin =
-            icon_button(ui, IconId::Pin, pin_name, pin_name).clicked() && mutations_enabled;
-        let archive_name = if flags.archived {
-            "Unarchive note"
-        } else {
-            "Archive note"
-        };
-        actions.toggle_archive = icon_button(ui, IconId::Archive, archive_name, archive_name)
-            .clicked()
-            && mutations_enabled;
-        let trash_name = if flags.trashed {
-            "Restore note"
-        } else {
-            "Move to Trash"
-        };
-        actions.toggle_trash =
-            icon_button(ui, IconId::Trash, trash_name, trash_name).clicked() && mutations_enabled;
         let preview_name = if preview {
             "Edit Markdown"
         } else {
@@ -125,15 +105,83 @@ pub fn show(
             && mutations_enabled;
         actions.toggle_inspector =
             icon_button(ui, IconId::Info, "Note information", "Note information").clicked();
-        actions.export_note = ui
-            .add_enabled(
-                mutations_enabled,
-                egui::Button::new("Export note").min_size(egui::vec2(44.0, 44.0)),
-            )
-            .clicked();
-        actions.save_now = ui
-            .add_enabled(mutations_enabled, egui::Button::new("Save now"))
-            .clicked();
+        let save_label = match draft.save_presentation() {
+            SavePresentation::Saved => "Saved",
+            SavePresentation::Saving => "Saving",
+            SavePresentation::Failed => "Save failed",
+        };
+        ui.weak(save_label);
+
+        let menu_icon =
+            crate::icons::icon_for_text_button(ui, IconId::Ellipsis, ui.visuals().text_color());
+        let note_actions = ui
+            .add(egui::Button::image(menu_icon).min_size(egui::vec2(38.0, 38.0)))
+            .accessible_name("Note actions")
+            .on_hover_text("Note actions");
+        note_actions.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::DisclosureTriangle, true, "Note actions")
+        });
+        ui.ctx().accesskit_node_builder(note_actions.id, |node| {
+            node.set_expanded(*note_actions_open)
+        });
+        if note_actions.clicked() {
+            *note_actions_open = !*note_actions_open;
+        }
+
+        let pin_name = if flags.pinned {
+            "Unpin note"
+        } else {
+            "Pin note"
+        };
+        let archive_name = if flags.archived {
+            "Unarchive note"
+        } else {
+            "Archive note"
+        };
+        let trash_name = if flags.trashed {
+            "Restore note"
+        } else {
+            "Move to Trash"
+        };
+        let mut picked = None;
+        egui::Popup::menu(&note_actions)
+            .open_bool(note_actions_open)
+            .show(|ui| {
+                ui.set_min_width(176.0);
+                for (label, action) in [
+                    (pin_name, 0_u8),
+                    (archive_name, 1),
+                    (trash_name, 2),
+                    ("Export note", 3),
+                    ("Save now", 4),
+                ] {
+                    let text = if label == "Move to Trash" {
+                        egui::RichText::new(label).color(ui.visuals().error_fg_color)
+                    } else {
+                        egui::RichText::new(label)
+                    };
+                    if ui
+                        .add_enabled(
+                            mutations_enabled,
+                            egui::Button::new(text).min_size(egui::vec2(164.0, 44.0)),
+                        )
+                        .clicked()
+                    {
+                        picked = Some(action);
+                    }
+                }
+            });
+        if let Some(action) = picked {
+            *note_actions_open = false;
+            match action {
+                0 => actions.toggle_pin = true,
+                1 => actions.toggle_archive = true,
+                2 => actions.toggle_trash = true,
+                3 => actions.export_note = true,
+                4 => actions.save_now = true,
+                _ => unreachable!(),
+            }
+        }
     });
     ui.separator();
 
@@ -154,7 +202,7 @@ pub fn show(
     if let Some(error) = draft.last_error() {
         ui.colored_label(ui.visuals().error_fg_color, &error.message);
         actions.retry = ui.button("Retry save").clicked();
-    } else if let Some(status) = status {
+    } else if let Some(status) = status.filter(|status| *status != "Saved") {
         ui.small(status);
     }
 

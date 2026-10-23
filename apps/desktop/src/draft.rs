@@ -39,6 +39,13 @@ enum SaveState {
     Failed(AppError),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SavePresentation {
+    Saved,
+    Saving,
+    Failed,
+}
+
 #[derive(Clone, Debug)]
 enum Transition {
     Switch(Draft),
@@ -129,6 +136,16 @@ impl DraftCoordinator {
         match &self.state {
             SaveState::Failed(error) => Some(error),
             _ => None,
+        }
+    }
+
+    pub fn save_presentation(&self) -> SavePresentation {
+        match self.state {
+            SaveState::Failed(_) => SavePresentation::Failed,
+            SaveState::Idle if !self.current.is_dirty() => SavePresentation::Saved,
+            SaveState::Idle | SaveState::Queued(_) | SaveState::InFlight(_) => {
+                SavePresentation::Saving
+            }
         }
     }
 

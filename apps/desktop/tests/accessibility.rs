@@ -21,15 +21,16 @@ fn every_primary_interactive_control_has_an_accessible_name() {
         "Archive",
         "Trash",
         "Alpha",
-        "Pin note",
-        "Archive note",
-        "Move to Trash",
+        "Toggle focus mode",
         "Preview Markdown",
-        "Save now",
+        "Note information",
         "Use light theme",
     ] {
         harness.get_by_role_and_label(Role::Button, label);
     }
+
+    harness.get_by_role_and_label(Role::DisclosureTriangle, "Note actions");
+    harness.get_by_label("Saved");
 
     harness.get_by_role_and_label(Role::CheckBox, "Reduce motion");
     harness.get_by_role_and_label(Role::Button, "#work/process");
@@ -68,6 +69,8 @@ fn data_disclosure_reports_state_and_transfer_targets_are_at_least_44_points() {
         );
     }
 
+    harness.get_by_label("Note actions").click();
+    harness.run();
     let export = harness.get_by_role_and_label(Role::Button, "Export note");
     assert!(export.rect().width() >= 44.0 && export.rect().height() >= 44.0);
 }
@@ -223,7 +226,8 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
     let mut new_note_step = None;
     let mut search_step = None;
     let mut row_step = None;
-    let mut save_step = None;
+    let mut focus_step = None;
+    let mut actions_step = None;
     let mut body_step = None;
     for step in 0..64 {
         harness.key_press(Key::Tab);
@@ -246,8 +250,11 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
         {
             row_step.get_or_insert(step);
         }
-        if harness.get_by_label("Save now").is_focused() {
-            save_step.get_or_insert(step);
+        if harness.get_by_label("Toggle focus mode").is_focused() {
+            focus_step.get_or_insert(step);
+        }
+        if harness.get_by_label("Note actions").is_focused() {
+            actions_step.get_or_insert(step);
         }
         if harness.get_by_label("Note body").is_focused() {
             body_step.get_or_insert(step);
@@ -257,11 +264,13 @@ fn keyboard_tab_traversal_reaches_primary_controls_in_visual_order() {
     let new_note_step = new_note_step.expect("Tab order never reached New note");
     let search_step = search_step.expect("Tab order never reached search");
     let row_step = row_step.expect("Tab order never reached a note row");
-    let save_step = save_step.expect("Tab order never reached Save now");
+    let focus_step = focus_step.expect("Tab order never reached focus mode");
+    let actions_step = actions_step.expect("Tab order never reached Note actions");
     let body_step = body_step.expect("Tab order never reached the note body");
     assert!(notes_step < new_note_step);
     assert!(new_note_step < search_step);
     assert!(search_step < row_step);
-    assert!(row_step < save_step);
-    assert!(save_step < body_step);
+    assert!(row_step < focus_step);
+    assert!(focus_step < actions_step);
+    assert!(actions_step < body_step);
 }

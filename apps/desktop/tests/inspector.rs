@@ -4,7 +4,7 @@ use common::{app, note};
 use crane_desktop::view_state::{
     inspector_presentation, InspectorPresentation, EDITOR_SIDE_INSET, INSPECTOR_WIDTH,
 };
-use eframe::egui::accesskit::Role;
+use eframe::egui::{accesskit::Role, Key};
 use egui_kittest::{kittest::Queryable, Harness};
 use std::time::{Duration, Instant};
 
@@ -60,6 +60,25 @@ fn ordinary_wide_inspector_is_a_sheet_and_does_not_shrink_the_editor() {
         .rect();
     assert!((before.width() - after.width()).abs() < 1.0);
     assert!((before.min.x - after.min.x).abs() < 1.0);
+}
+
+#[test]
+fn escape_closes_the_inspector_sheet_and_restores_editor_focus() {
+    let (app, _) = app(vec![note("a", "Alpha", "body", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1440.0, 900.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+
+    harness.get_by_label("Note information").click();
+    harness.run_steps(4);
+    harness.get_by_role_and_label(Role::Window, "Inspector");
+
+    harness.key_press(Key::Escape);
+    harness.run_steps(3);
+
+    assert!(harness.query_by_label("Inspector").is_none());
+    assert!(harness.get_by_label("Note body").is_focused());
 }
 
 #[test]

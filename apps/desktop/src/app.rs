@@ -118,6 +118,7 @@ pub struct CraneApp {
     fonts_configured: bool,
     transfers: TransferController,
     data_menu_open: bool,
+    note_actions_open: bool,
     request_restore_cancel_focus: bool,
     pending_queries: HashMap<u64, PendingQuery>,
     deferred_queries: VecDeque<WorkerRequest>,
@@ -225,6 +226,7 @@ impl CraneApp {
             fonts_configured: false,
             transfers: TransferController::default(),
             data_menu_open: false,
+            note_actions_open: false,
             request_restore_cancel_focus: false,
             pending_queries: HashMap::new(),
             deferred_queries: VecDeque::new(),
@@ -915,6 +917,7 @@ impl CraneApp {
                     caret_jump,
                     status: status.as_deref(),
                     mutations_enabled: true,
+                    note_actions_open: &mut self.note_actions_open,
                     completion: Some(editor::CompletionView {
                         state: &mut self.completion,
                         emit_query: &mut emit,
@@ -939,6 +942,7 @@ impl CraneApp {
                     caret_jump: None,
                     status: status.as_deref(),
                     mutations_enabled: false,
+                    note_actions_open: &mut self.note_actions_open,
                     completion: None,
                     formatting: None,
                 },
@@ -1554,8 +1558,14 @@ impl CraneApp {
         if self.completion.popup_visible() || self.quick_open.open || self.chooser.open {
             return;
         }
+        if self.note_actions_open {
+            self.note_actions_open = false;
+            self.request_body_focus = true;
+            return;
+        }
         if self.inspector.open && self.inspector_floating {
             self.inspector.open = false;
+            self.request_body_focus = true;
             return;
         }
         if self.view.focus_mode {
