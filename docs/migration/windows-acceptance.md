@@ -216,3 +216,54 @@ The rebuilt artifacts are 14,987,264-byte `crane.exe` with SHA-256
 4,372,070-byte `Crane_0.3.0_x64-setup.exe` with SHA-256
 `DD5E8751DB8C64BB79FE6120345E7684F025ACB1C064A75008E9057515D3830B`.
 They remain unsigned, and the previously open physical interaction checks remain open.
+
+## 2026-10-24 — Nordic Daylight native UI acceptance
+
+This run used the rebuilt native `egui`/`eframe` application directly, not a browser
+preview. The app was launched only with
+`--preview-data-dir artifacts/test-data/nordic-daylight-acceptance-20261024`; that
+directory contained `.crane-preview-fixture`, and the production library was never
+opened. Host evidence was Windows build `10.0.26200.9711` (25H2), keyboard preload
+`00004009`, NVIDIA GeForce RTX 3050 Laptop GPU through wgpu/DX12, and 96 applied DPI
+(100% display scale).
+
+The native AccessKit tree and screenshots were captured from the running eframe window.
+Review images are local, git-ignored evidence under `.impeccable/review/`; they are not
+product assets and must not be shipped.
+
+| Area | Native evidence | Status |
+| --- | --- | --- |
+| Responsive shell | Light and dark themes inspected at maximized wide, 1000-pixel intermediate, and the enforced 720-by-560 minimum. Rail/list/editor hierarchy, wrapping, selection, formatting controls, and bottom preferences remained visible. | Pass at 100% scale |
+| Note-browser rows | The first native capture exposed overlapping 106-point rows. `note_browser_rows_do_not_overlap` reproduced it; changing excerpt placement from cursor-moving `put` to non-cursor-moving `place` fixed the geometry. Rebuilt native captures show separated rows. | Pass after fix `5c007e3` |
+| Footer preferences | Native input found `Reduce motion` below the viewport at the supported minimum height. A new viewport-bound assertion failed at `[[8, 563] - [28, 584]]`; reserving a 160-point footer moved the control on-screen. The rebuilt app accepted the checkbox and persisted `"reducedMotion": true`. | Pass after fix `3262197` |
+| Light/dark surfaces | Default shell, Quick Open, inspector, focus mode, note menu, empty search, intermediate/minimum layouts, and maximized layout were visually inspected. Theme switching persisted through the isolated `settings.json`. | Pass |
+| Accessibility tree | AccessKit exposed named controls for primary navigation, theme, reduced motion, search, Quick Open close, inspector tabs/close, note actions, editor fields, formatting, and wiki-link completion. Escape dismissed Quick Open and the inspector and returned focus to the note body; Escape exited focus mode. | Pass for programmatic names/focus |
+| Unicode persistence | Entered Latin (`naïve café`), Devanagari, Arabic, CJK, combining marks, and ZWJ/skin-tone emoji into the native editor. The `Note body` value remained exact, `notes.json` decoded exactly, and save → switch → reopen plus full process restart preserved the body. | Pass for paste and persistence |
+| Native editing | Verified Ctrl+A/C/X/V, Ctrl+Home/End, Ctrl+Shift+Right word selection, two distinct Ctrl+Z steps, two Ctrl+Y steps, toolbar bold formatting with the native selection, formatting undo/redo, explicit Ctrl+S, and note switching. | Pass |
+| Wiki-link completion | Typing `[[Week` exposed the named `Complete link: Weekend reading` target; Enter produced `[[Weekend reading]]`, and Ctrl+S persisted it. | Pass |
+| Search recovery | A no-match query exposed `No notes match …`, `Clear search`, and `New note`; clearing restored the note rows. | Pass |
+| Build artifacts | `scripts/build-windows.ps1` reran after both physical fixes; dependency-layer and artifact smoke checks passed. Staged `crane.exe`: 15,104,000 bytes, SHA-256 `A2B11E22D5F25704BD4DC87DB2D3063FBA5A09F2750D5CF614F254A83556DB59`. Installer: 4,399,511 bytes, SHA-256 `25F3DB1EB11B6FB56EB1FDEBAB321D07F85D8875A100318AB1A9F0E6698328BD`. | Pass; unsigned |
+
+The native text accessibility projection duplicated some complex-script glyphs in its
+derived `Document text`, while the editable control value, screenshot, and persisted
+JSON were correct. This is recorded as an assistive-technology follow-up rather than a
+data-loss defect; Narrator speech was not exercised in this run.
+
+Still open and not claimed by this agent run:
+
+- 150% and 200% display-scale captures. Changing Windows display scale is a disruptive
+  system-setting action and was not performed without an action-time confirmation.
+- Live IME composition, including candidate-window positioning and commit/cancel feel.
+- Clipboard transfer to and from a second native Windows application; the in-editor
+  copy/cut/paste round trip passed.
+- Narrator speech, Windows high-contrast mode, and a keyboard-only pass with those OS
+  accessibility features active.
+- Physical editing of the synthetic near-2 MiB body and very long unbroken line. The
+  automated large-note suite and the 2026-10-22 isolated relaunch/byte checks remain the
+  evidence for those cases.
+- A network-disconnected launch. Static release checks still forbid a web stack,
+  remote fonts, remote scripts, and required services.
+
+Accordingly, this run closes the ordinary 100%-scale native interaction and responsive
+visual checks, but it does not convert the outstanding OS-scale, IME, Narrator,
+high-contrast, cross-application clipboard, or physical near-limit checks into passes.
