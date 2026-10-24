@@ -380,7 +380,13 @@ fn crowded_collapsed_rail_keeps_preferences_visible_and_usable() {
     harness.get_by_label("Use light theme").click();
     harness.run();
     harness.get_by_role_and_label(eframe::egui::accesskit::Role::Button, "Use dark theme");
-    harness.get_by_role_and_label(eframe::egui::accesskit::Role::CheckBox, "Reduce motion");
+    let reduce_motion =
+        harness.get_by_role_and_label(eframe::egui::accesskit::Role::CheckBox, "Reduce motion");
+    assert!(
+        reduce_motion.rect().max.y <= 560.0,
+        "reduced-motion preference was outside the viewport: {:?}",
+        reduce_motion.rect()
+    );
 }
 
 #[test]
