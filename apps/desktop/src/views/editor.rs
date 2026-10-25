@@ -45,6 +45,8 @@ pub struct NoteFlags {
 pub struct CompletionView<'a> {
     pub state: &'a mut CompletionState,
     pub emit_query: &'a mut dyn FnMut(Query),
+    /// A higher-priority modal owns keyboard input for this frame.
+    pub suspended: bool,
 }
 
 pub struct FormattingView<'a> {
@@ -266,7 +268,11 @@ fn show_body(
     let mut cancel_popup = false;
     if let Some(view) = completion.as_mut() {
         track_ime(ui, view.state);
-        if view.state.popup_visible() {
+        if view.suspended {
+            // Focus has moved to a modal, so the editor may not receive the
+            // IME commit/disable event that ends its previous composition.
+            view.state.ime_composing = false;
+        } else if view.state.popup_visible() {
             let move_down =
                 ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowDown));
             let move_up = ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowUp));
@@ -339,48 +345,14 @@ fn show_body(
         }
     }
 
-    let Some(view) = completion.as_mut() else {
-        return;
-    };
-    if cancel_popup {
-        view.state.dismiss();
-    } else {
-        let fragment = caret_fragment(ui.ctx(), response_id, &draft.current().body);
-        view.state.set_fragment(fragment, view.emit_query);
-    }
-    if let Some(index) = accept_index {
-        actions.changed |= apply_completion_at(
-            ui.ctx(),
-            response_id,
-            &mut draft.current_mut().body,
-            view.state,
-            index,
-            &body_response,
-        );
-    }
-    if view.state.popup_visible() {
-        let anchor = body_response.rect.left_bottom() + egui::vec2(0.0, 4.0);
-        let mut clicked = None;
-        egui::Area::new(egui::Id::unique("completion-popup"))
-            .fixed_pos(anchor)
-            .show(ui.ctx(), |ui| {
-                crate::theme::menu_frame(theme).show(ui, |ui| {
-                    ui.set_min_width(240.0);
-                    for (index, candidate) in view.state.candidates.iter().enumerate() {
-                        let text = candidate.insert_text().to_owned();
-                        let name = format!("Complete link: {text}");
-                        let selected = index == view.state.active;
-                        if ui
-                            .add(egui::Button::new(&text).selected(selected))
-                            .accessible_name(&name)
-                            .clicked()
-                        {
-                            clicked = Some(index);
-                        }
-                    }
-                });
-            });
-        if let Some(index) = clicked {
+    if let Some(view) = completion.as_mut().filter(|view| !view.suspended) {
+        if cancel_popup {
+            view.state.dismiss();
+        } else {
+            let fragment = caret_fragment(ui.ctx(), response_id, &draft.current().body);
+            view.state.set_fragment(fragment, view.emit_query);
+        }
+        if let Some(index) = accept_index {
             actions.changed |= apply_completion_at(
                 ui.ctx(),
                 response_id,
@@ -389,6 +361,39 @@ fn show_body(
                 index,
                 &body_response,
             );
+        }
+        if view.state.popup_visible() {
+            let anchor = body_response.rect.left_bottom() + egui::vec2(0.0, 4.0);
+            let mut clicked = None;
+            egui::Area::new(egui::Id::unique("completion-popup"))
+                .fixed_pos(anchor)
+                .show(ui.ctx(), |ui| {
+                    crate::theme::menu_frame(theme).show(ui, |ui| {
+                        ui.set_min_width(240.0);
+                        for (index, candidate) in view.state.candidates.iter().enumerate() {
+                            let text = candidate.insert_text().to_owned();
+                            let name = format!("Complete link: {text}");
+                            let selected = index == view.state.active;
+                            if ui
+                                .add(egui::Button::new(&text).selected(selected))
+                                .accessible_name(&name)
+                                .clicked()
+                            {
+                                clicked = Some(index);
+                            }
+                        }
+                    });
+                });
+            if let Some(index) = clicked {
+                actions.changed |= apply_completion_at(
+                    ui.ctx(),
+                    response_id,
+                    &mut draft.current_mut().body,
+                    view.state,
+                    index,
+                    &body_response,
+                );
+            }
         }
     }
 

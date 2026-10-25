@@ -284,7 +284,11 @@ Each now has a focused regression and a fresh full-workspace verification result
   tests cycle Tab within each dialog and prove attempted background activation does not
   reach navigation or editor controls. Application-level Ctrl+N/S/P/F/O shortcuts are
   gated while a transient modal is active, and Escape closes the link dialog without
-  dismissing the inspector beneath it; and
+  dismissing the inspector beneath it. A final render-order regression now proves that
+  one Escape closes Quick Open even when wiki-link completion was already visible;
+  completion input and rendering are suspended while a higher-priority modal owns focus,
+  and an IME regression proves that modal focus transfer cannot leave completion stuck
+  in composition mode; and
 - transfer-disabled collection and tag destinations no longer emit navigation intents.
   The delayed-import harness clicks a disabled destination and verifies the active view
   remains unchanged.
@@ -305,10 +309,10 @@ Fresh verification on 2026-10-25 passed:
 
 The rebuilt unsigned artifacts are:
 
-- `crane.exe`: 15,141,888 bytes, SHA-256
-  `D0D841858FCB0DB5B1EB37E69897D61F561AAD9E69A652922DF379F3CD18815E`;
-- `Crane_0.3.0_x64-setup.exe`: 4,408,511 bytes, SHA-256
-  `C3938FA46DD487CD6DDF641431B86F5FA6EF423DEE4DB02219306F584206D736`.
+- `crane.exe`: 15,143,424 bytes, SHA-256
+  `D2DE48234EE772FBAD77384A72D9B8C2A689CBBDF3B1F0DCDF2F79E6DB18785F`;
+- `Crane_0.3.0_x64-setup.exe`: 4,407,755 bytes, SHA-256
+  `4C9C83A355791A6D29B1E68F9C6406C4D824DAFE7F5009FCDC8FAB7350A9A155`.
 
 A new physical screenshot pass was attempted after this rebuild, but the Windows UI
 automation runtime failed before app attachment with `failed to write kernel assets: The

@@ -671,6 +671,10 @@ impl CraneApp {
         }
     }
 
+    pub fn completion_ime_composing_for_test(&self) -> bool {
+        self.completion.ime_composing
+    }
+
     pub fn simulate_save_failure_for_test(&mut self, message: &str) {
         let now = self.now_millis();
         let Some(draft) = &mut self.draft else {
@@ -943,6 +947,10 @@ impl CraneApp {
             archived: note.archived,
             trashed: note.trashed,
         };
+        let completion_suspended = self.transfers.restore_dialog().is_some()
+            || self.quick_open.open
+            || self.chooser.open
+            || self.formatting.link_open;
         let mut completion_outgoing = None;
         let actions = if mutation_enabled {
             let mut emit = |query: Query| {
@@ -965,6 +973,7 @@ impl CraneApp {
                     completion: Some(editor::CompletionView {
                         state: &mut self.completion,
                         emit_query: &mut emit,
+                        suspended: completion_suspended,
                     }),
                     formatting: Some(editor::FormattingView {
                         state: &mut self.formatting,

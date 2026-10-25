@@ -70,6 +70,83 @@ fn quick_open_escape_closes_without_selection_change() {
 }
 
 #[test]
+fn quick_open_escape_wins_over_visible_wiki_completion() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "", 3),
+        note("f", "Field Notes", "about fields", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .focus();
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .set_text_value_accesskit("[[Fie");
+    harness.key_press(eframe::egui::Key::End);
+    settle(&mut harness);
+    harness.get_by_label("Complete link: Field Notes");
+
+    open_overlay(&mut harness);
+    harness.get_by_role_and_label(Role::TextInput, "Quick Open");
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(2);
+
+    assert!(
+        harness
+            .query_by_role_and_label(Role::TextInput, "Quick Open")
+            .is_none(),
+        "one Escape must close Quick Open even when completion was visible"
+    );
+}
+
+#[test]
+fn quick_open_does_not_leave_wiki_completion_stuck_in_ime_mode() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "", 3),
+        note("f", "Field Notes", "about fields", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .focus();
+    harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .set_text_value_accesskit("[[Fie");
+    harness.key_press(eframe::egui::Key::End);
+    settle(&mut harness);
+    harness.get_by_label("Complete link: Field Notes");
+
+    harness.event(eframe::egui::Event::Ime(eframe::egui::ImeEvent::Preedit {
+        text: "candidate".to_owned(),
+        active_range_chars: None,
+    }));
+    harness.run();
+    assert!(harness.state().completion_ime_composing_for_test());
+    assert_eq!(
+        harness
+            .query_all_by_label_contains("Complete link: ")
+            .count(),
+        0
+    );
+
+    open_overlay(&mut harness);
+    assert!(!harness.state().completion_ime_composing_for_test());
+    harness.event(eframe::egui::Event::Ime(eframe::egui::ImeEvent::Commit(
+        String::new(),
+    )));
+    harness.run();
+    assert!(!harness.state().completion_ime_composing_for_test());
+    harness.key_press(eframe::egui::Key::Escape);
+    settle(&mut harness);
+}
+
+#[test]
 fn quick_open_traps_tab_focus_inside_the_dialog() {
     let (app, _) = app(vec![note("a", "Alpha", "first", 3)]);
     let mut harness = Harness::builder()
