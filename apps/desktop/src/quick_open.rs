@@ -59,15 +59,21 @@ pub fn show(
     }
     let mut intent = None;
     let mut close_requested = false;
-    egui::Window::new("Quick Open")
-        .title_bar(false)
+    let modal_id = egui::Id::unique("crane-quick-open");
+    let area = egui::Modal::default_area(modal_id)
+        .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
+        .accessible_name("Quick Open");
+    let response = egui::Modal::new(modal_id)
+        .area(area)
         .frame(crate::theme::overlay_frame(
             crate::theme::choice_for_context(ctx),
         ))
-        .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
-        .min_width(480.0)
-        .max_width(560.0)
+        .backdrop_color(crate::theme::modal_backdrop(
+            crate::theme::choice_for_context(ctx),
+        ))
         .show(ctx, |ui| {
+            ui.set_min_width(480.0);
+            ui.set_max_width(560.0);
             ui.horizontal(|ui| {
                 ui.heading("Quick Open");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -92,7 +98,6 @@ pub fn show(
                 ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowDown));
             let move_up = ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::ArrowUp));
             let accept = ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Enter));
-            let cancel = ui.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
             if move_down && !state.hits.is_empty() {
                 state.active = (state.active + 1).min(state.hits.len() - 1);
             }
@@ -146,10 +151,8 @@ pub fn show(
                     close_requested = true;
                 }
             }
-            if cancel {
-                close_requested = true;
-            }
         });
+    close_requested |= response.should_close();
     if close_requested {
         close(state);
     }

@@ -286,6 +286,13 @@ fn delayed_import_blocks_typing_create_and_archive_until_refresh() {
     gate.wait_until_active();
     harness.run();
 
+    let pinned = harness.get_by_role_and_label(Role::Button, "Pinned");
+    assert!(pinned.accesskit_node().is_disabled());
+    pinned.click();
+    harness.run();
+    harness.get_by_label("Notes browser");
+    assert!(harness.query_by_label("Pinned browser").is_none());
+
     harness
         .get_by_role_and_label(Role::MultilineTextInput, "Note body")
         .set_text_value_accesskit("Must not apply");

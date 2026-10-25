@@ -197,20 +197,17 @@ pub fn show_chooser(
     }
     let mut intent = None;
     let mut close_requested = false;
-    eframe::egui::Window::new("Choose link target")
-        .title_bar(false)
+    let modal_id = eframe::egui::Id::unique("crane-link-target-chooser");
+    let area = eframe::egui::Modal::default_area(modal_id).accessible_name("Choose link target");
+    let response = eframe::egui::Modal::new(modal_id)
+        .area(area)
         .frame(crate::theme::overlay_frame(
             crate::theme::choice_for_context(ctx),
         ))
-        .collapsible(false)
-        .resizable(false)
-        .anchor(eframe::egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .backdrop_color(crate::theme::modal_backdrop(
+            crate::theme::choice_for_context(ctx),
+        ))
         .show(ctx, |ui| {
-            if ui.input_mut(|input| {
-                input.consume_key(eframe::egui::Modifiers::NONE, eframe::egui::Key::Escape)
-            }) {
-                close_requested = true;
-            }
             ui.horizontal(|ui| {
                 ui.heading("Choose link target");
                 ui.with_layout(
@@ -264,6 +261,7 @@ pub fn show_chooser(
                 close_requested = true;
             }
         });
+    close_requested |= response.should_close();
     if close_requested {
         close_chooser(state);
         if intent.is_none() {

@@ -70,6 +70,53 @@ fn quick_open_escape_closes_without_selection_change() {
 }
 
 #[test]
+fn quick_open_traps_tab_focus_inside_the_dialog() {
+    let (app, _) = app(vec![note("a", "Alpha", "first", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    open_overlay(&mut harness);
+
+    for _ in 0..12 {
+        harness.key_press(eframe::egui::Key::Tab);
+        harness.run_steps(2);
+        let result_focused = harness
+            .query_all_by_label("Alpha")
+            .any(|node| node.is_focused());
+        assert!(
+            harness.get_by_label("Close Quick Open").is_focused()
+                || harness
+                    .get_by_role_and_label(Role::TextInput, "Quick Open")
+                    .is_focused()
+                || harness.get_by_label("Include archived").is_focused()
+                || result_focused,
+            "Tab focus escaped Quick Open"
+        );
+    }
+}
+
+#[test]
+fn quick_open_blocks_background_navigation() {
+    let (app, _) = app(vec![note("a", "Alpha", "first", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    open_overlay(&mut harness);
+
+    harness
+        .get_by_role_and_label(Role::Button, "Pinned")
+        .click();
+    harness.run_steps(2);
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(2);
+
+    harness.get_by_label("Notes browser");
+    assert!(harness.query_by_label("Pinned browser").is_none());
+}
+
+#[test]
 fn quick_open_visible_control_and_archived_toggle() {
     let (app, _) = app(vec![
         note("a", "Alpha", "first", 3),

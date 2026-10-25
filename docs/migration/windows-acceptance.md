@@ -267,3 +267,51 @@ Still open and not claimed by this agent run:
 Accordingly, this run closes the ordinary 100%-scale native interaction and responsive
 visual checks, but it does not convert the outstanding OS-scale, IME, Narrator,
 high-contrast, cross-application clipboard, or physical near-limit checks into passes.
+
+## 2026-10-25 — Nordic Daylight post-review remediation
+
+The release review identified four code-level blockers in the 2026-10-24 candidate.
+Each now has a focused regression and a fresh full-workspace verification result:
+
+- the editor reserves the measured wrapped formatting-toolbar height before sizing the
+  native `TextEdit`; the 720-by-560 harness asserts the body does not overlap the bar and
+  every formatting target remains inside the viewport;
+- Markdown span composition now uses a start-ordered sweep plus priority heap rather
+  than scanning every candidate for every boundary; a 2,000-candidate adversarial test
+  bounds heap operations and completes in approximately 0.01 seconds;
+- Quick Open, the ambiguous wiki-link chooser, and link insertion now use `egui::Modal`;
+  tests cycle Tab within each dialog and prove attempted background activation does not
+  reach navigation or editor controls; and
+- transfer-disabled collection and tag destinations no longer emit navigation intents.
+  The delayed-import harness clicks a disabled destination and verifies the active view
+  remains unchanged.
+
+The same pass moved `Note actions` and the reduced-motion preference onto the shared
+40/44-point target policy. The library footer reserves 176 points at heights up to 600
+and 160 points above that, keeping the preference inside the supported minimum viewport
+without clipping ordinarily visible tag rows.
+
+Fresh verification on 2026-10-25 passed:
+
+- `cargo fmt --all -- --check`;
+- `cargo test --workspace --all-features --locked -j 1`;
+- workspace clippy for all targets/features with `-D warnings`;
+- workspace build for all targets/features;
+- `check-layers.ps1` and `check-native-release.ps1`, including both self-tests; and
+- `smoke-windows.ps1 -SelfTest` plus `scripts/build-windows.ps1`.
+
+The rebuilt unsigned artifacts are:
+
+- `crane.exe`: 15,141,888 bytes, SHA-256
+  `3E1A077A3FF271900FB7FC67BD68F2A2D41D082927C5399653E238C85E73E140`;
+- `Crane_0.3.0_x64-setup.exe`: 4,410,686 bytes, SHA-256
+  `782B2718EB1DDE0A8710DFDDABF80AD360E7EC7E599575D54B1F261298865874`.
+
+A new physical screenshot pass was attempted after this rebuild, but the Windows UI
+automation runtime failed before app attachment with `failed to write kernel assets: The
+system cannot find the path specified (os error 3)`. Therefore this entry records the
+fresh automated geometry and native artifact evidence, not a replacement physical
+capture. The 2026-10-24 100%-scale interaction evidence remains valid for unchanged
+flows; the previously listed OS-scale, IME, Narrator, high-contrast,
+cross-application-clipboard, disconnected-network, and physical near-limit checks remain
+open.

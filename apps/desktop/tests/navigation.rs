@@ -50,7 +50,9 @@ fn native_navigation_searches_filters_and_changes_note_state() {
         .get_by_label("Search notes")
         .set_text_value_accesskit("");
     settle(&mut harness);
-    harness.get_by_label("#work/process").click();
+    harness
+        .get_by_role_and_label(Role::Button, "#work/process")
+        .click();
     settle(&mut harness);
     harness.get_by_label("Alpha plan");
     assert!(harness.query_by_label("Beta reading").is_none());
@@ -606,7 +608,7 @@ fn assert_icon_target(
     label: &str,
     minimum: f32,
 ) {
-    let node = harness.get_by_role_and_label(Role::Button, label);
+    let node = harness.get_by_label(label);
     let rect = node.rect();
     assert!(
         rect.width() >= minimum && rect.height() >= minimum,
@@ -633,6 +635,7 @@ fn responsive_layouts_keep_controls_findable_sized_and_rectangular() {
             "Quick Open",
             "Note information",
             "Toggle focus mode",
+            "Note actions",
             "Heading",
             "Task list",
             "Bulleted list",
@@ -664,7 +667,12 @@ fn compact_mode_targets_are_at_least_44_points() {
         .build_ui_state(|ui, app| app.show(ui), app);
     settle(&mut harness);
 
-    for label in ["Note information", "Toggle focus mode", "Bold"] {
+    for label in [
+        "Note information",
+        "Toggle focus mode",
+        "Note actions",
+        "Bold",
+    ] {
         assert_icon_target(&harness, label, 44.0);
     }
 
@@ -678,6 +686,40 @@ fn compact_mode_targets_are_at_least_44_points() {
     harness.get_by_label("Collapse project").click();
     harness.run_steps(2);
     assert_icon_target(&harness, "Expand project", 44.0);
+}
+
+#[test]
+fn collapsed_reduce_motion_control_keeps_a_full_touch_target() {
+    let (app, _) = app(vec![note("a", "Alpha", "Body", 1)]);
+    let harness = Harness::builder()
+        .with_size([1000.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let rect = harness
+        .get_by_role_and_label(Role::CheckBox, "Reduce motion")
+        .rect();
+    assert!(rect.height() >= 40.0, "reduced motion target was {rect:?}");
+}
+
+#[test]
+fn minimum_window_keeps_formatting_controls_inside_the_editor_viewport() {
+    let (app, _) = app(vec![note("a", "Alpha", "Body", 1)]);
+    let harness = Harness::builder()
+        .with_size([720.0, 560.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+
+    let body = harness
+        .get_by_role_and_label(Role::MultilineTextInput, "Note body")
+        .rect();
+    let bold = harness.get_by_role_and_label(Role::Button, "Bold").rect();
+    assert!(
+        bold.max.y <= 560.0,
+        "formatting controls were outside the minimum viewport: {bold:?}"
+    );
+    assert!(
+        body.max.y <= bold.min.y,
+        "editor body overlapped the formatting controls: {body:?} vs {bold:?}"
+    );
 }
 
 #[test]

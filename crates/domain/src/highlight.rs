@@ -1,6 +1,12 @@
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use std::collections::HashSet;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashSet};
 use std::ops::Range;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(test)]
+static COMPOSE_CANDIDATE_CHECKS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MarkdownSpan {
@@ -110,28 +116,39 @@ fn compose(source: &str, candidates: Vec<Candidate>) -> Vec<MarkdownSpan> {
     boundaries.sort_unstable();
     boundaries.dedup();
 
+    let mut by_start = (0..candidates.len()).collect::<Vec<_>>();
+    by_start.sort_unstable_by_key(|&index| (candidates[index].byte_range.start, index));
+    let mut next_candidate = 0;
+    let mut active = BinaryHeap::new();
+
     let mut spans: Vec<MarkdownSpan> = Vec::new();
     for pair in boundaries.windows(2) {
         let range = pair[0]..pair[1];
         if range.is_empty() {
             continue;
         }
-        let role = candidates
-            .iter()
-            .filter(|candidate| {
-                candidate.byte_range.start <= range.start && candidate.byte_range.end >= range.end
-            })
-            .max_by(|left, right| {
-                left.priority
-                    .cmp(&right.priority)
-                    .then_with(|| {
-                        let left_len = left.byte_range.end - left.byte_range.start;
-                        let right_len = right.byte_range.end - right.byte_range.start;
-                        right_len.cmp(&left_len)
-                    })
-                    .then_with(|| left.order.cmp(&right.order))
-            })
-            .map_or(MarkdownRole::Plain, |candidate| candidate.role.clone());
+        while next_candidate < by_start.len()
+            && candidates[by_start[next_candidate]].byte_range.start <= range.start
+        {
+            let index = by_start[next_candidate];
+            let candidate = &candidates[index];
+            let len = candidate.byte_range.end - candidate.byte_range.start;
+            active.push((candidate.priority, Reverse(len), candidate.order, index));
+            next_candidate += 1;
+            #[cfg(test)]
+            COMPOSE_CANDIDATE_CHECKS.fetch_add(1, Ordering::Relaxed);
+        }
+        while active
+            .peek()
+            .is_some_and(|(_, _, _, index)| candidates[*index].byte_range.end <= range.start)
+        {
+            active.pop();
+            #[cfg(test)]
+            COMPOSE_CANDIDATE_CHECKS.fetch_add(1, Ordering::Relaxed);
+        }
+        let role = active.peek().map_or(MarkdownRole::Plain, |entry| {
+            candidates[entry.3].role.clone()
+        });
 
         if let Some(previous) = spans.last_mut() {
             if previous.role == role && previous.byte_range.end == range.start {
@@ -145,6 +162,37 @@ fn compose(source: &str, candidates: Vec<Candidate>) -> Vec<MarkdownSpan> {
         });
     }
     spans
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn composing_many_disjoint_candidates_does_not_scan_every_candidate_per_span() {
+        let source = "x ".repeat(2_000);
+        let mut candidates = Vec::new();
+        for start in (0..source.len()).step_by(2) {
+            add_candidate(
+                &source,
+                &mut candidates,
+                start..start + 1,
+                MarkdownRole::Strong,
+                PRIORITY_INLINE,
+            );
+        }
+
+        COMPOSE_CANDIDATE_CHECKS.store(0, Ordering::Relaxed);
+        let spans = compose(&source, candidates);
+        let checks = COMPOSE_CANDIDATE_CHECKS.load(Ordering::Relaxed);
+
+        assert_eq!(spans.first().unwrap().byte_range.start, 0);
+        assert_eq!(spans.last().unwrap().byte_range.end, source.len());
+        assert!(
+            checks <= 12_000,
+            "compose performed {checks} candidate checks for a 2,000-candidate document"
+        );
+    }
 }
 
 #[derive(Clone, Debug)]

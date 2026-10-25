@@ -95,6 +95,45 @@ fn link_dialog_has_named_controls_and_escape_restores_the_editor() {
 }
 
 #[test]
+fn link_dialog_traps_tab_focus_inside_the_dialog() {
+    let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Insert link").click();
+    harness.run_steps(2);
+
+    for _ in 0..9 {
+        harness.key_press(eframe::egui::Key::Tab);
+        harness.run_steps(2);
+        assert!(
+            harness.get_by_label("Link URL").is_focused()
+                || harness.get_by_label("Insert link address").is_focused()
+                || harness.get_by_label("Cancel link insertion").is_focused(),
+            "Tab focus escaped the link dialog"
+        );
+    }
+}
+
+#[test]
+fn link_dialog_blocks_background_editor_actions() {
+    let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Insert link").click();
+    harness.run_steps(2);
+
+    harness.get_by_label("Preview Markdown").click();
+    harness.run_steps(2);
+
+    harness.get_by_label("Preview Markdown");
+    assert!(harness.query_by_label("Edit Markdown").is_none());
+}
+
+#[test]
 fn formatting_undo_restores_body() {
     let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
     let mut harness = Harness::builder()

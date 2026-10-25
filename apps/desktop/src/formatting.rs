@@ -47,6 +47,7 @@ pub struct FormattingState {
     /// back to this when the live range is collapsed.
     pub last_char_range: Option<(usize, usize)>,
     active: Vec<FormattingKind>,
+    restore_body_focus: bool,
 }
 
 impl FormattingState {
@@ -95,6 +96,10 @@ impl FormattingState {
 
     fn is_active(&self, kind: FormattingKind) -> bool {
         self.active.contains(&kind) || (kind == FormattingKind::Link && self.link_open)
+    }
+
+    pub fn take_body_focus_request(&mut self) -> bool {
+        std::mem::take(&mut self.restore_body_focus)
     }
 }
 
@@ -452,22 +457,21 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
         {
             state.link_open = true;
             state.link_url.clear();
+            state.restore_body_focus = false;
         }
     });
     if state.link_open {
-        egui::Window::new("format-link-dialog")
-            .title_bar(false)
-            .resizable(false)
-            .collapsible(false)
+        let modal_id = egui::Id::unique("format-link-dialog");
+        let area = egui::Modal::default_area(modal_id).accessible_name("Insert link");
+        let response = egui::Modal::new(modal_id)
+            .area(area)
             .frame(crate::theme::overlay_frame(
                 crate::theme::choice_for_context(ui.ctx()),
             ))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .backdrop_color(crate::theme::modal_backdrop(
+                crate::theme::choice_for_context(ui.ctx()),
+            ))
             .show(ui.ctx(), |ui| {
-                if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
-                {
-                    state.link_open = false;
-                }
                 ui.label("Link address");
                 ui.add(
                     egui::TextEdit::singleline(&mut state.link_url)
@@ -485,6 +489,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
                             url: state.link_url.clone(),
                         });
                         state.link_open = false;
+                        state.restore_body_focus = true;
                     }
                     if ui
                         .button("Cancel")
@@ -492,11 +497,27 @@ pub fn show(ui: &mut egui::Ui, state: &mut FormattingState, enabled: bool) -> Op
                         .clicked()
                     {
                         state.link_open = false;
+                        state.restore_body_focus = true;
                     }
                 });
             });
+        if response.should_close() {
+            state.link_open = false;
+            state.restore_body_focus = true;
+        }
     }
     action
+}
+
+pub fn toolbar_height(ui: &egui::Ui, available_width: f32) -> f32 {
+    const TOOL_COUNT: usize = 10;
+
+    let edge = crate::icons::target_size(ui);
+    let spacing = ui.spacing().item_spacing;
+    let tools_per_row = (((available_width + spacing.x) / (edge + spacing.x)).floor() as usize)
+        .clamp(1, TOOL_COUNT);
+    let rows = TOOL_COUNT.div_ceil(tools_per_row);
+    rows as f32 * edge + rows.saturating_sub(1) as f32 * spacing.y
 }
 
 fn formatting_button(

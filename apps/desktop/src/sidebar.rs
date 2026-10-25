@@ -112,7 +112,7 @@ fn show_collections(
             mutations_enabled,
             theme,
         );
-        if response.clicked() {
+        if mutations_enabled && response.clicked() {
             intent = Some(SidebarIntent::Collection(collection));
         }
     }
@@ -165,7 +165,7 @@ fn show_tag(
             mutations_enabled,
             theme,
         );
-        if response.clicked() {
+        if mutations_enabled && response.clicked() {
             intent = Some(SidebarIntent::Tag(Some(node.path.clone())));
         }
     });
@@ -200,11 +200,15 @@ fn destination_row(
 ) -> egui::Response {
     let palette = crate::theme::tokens(theme_choice);
     let edge = crate::icons::target_size(ui);
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), edge), egui::Sense::click());
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), edge), sense);
     let fill = if selected {
         palette.surface_selected
-    } else if response.hovered() {
+    } else if enabled && response.hovered() {
         palette.surface_hover
     } else {
         egui::Color32::TRANSPARENT

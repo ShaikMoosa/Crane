@@ -111,9 +111,19 @@ pub fn show(ui: &mut egui::Ui, view: LibraryView<'_>) -> LibraryActions {
         .on_hover_text(theme_label)
         .clicked();
     let mut reduced = reduced_motion;
+    let reduced_label = if collapsed { "RM" } else { "Reduce motion" };
+    let reduced_width = if collapsed {
+        ui.available_width()
+    } else {
+        ui.available_width().max(44.0)
+    };
     let reduced_response = ui
-        .checkbox(&mut reduced, if collapsed { "" } else { "Reduce motion" })
-        .accessible_name("Reduce motion");
+        .add_sized(
+            [reduced_width, crate::icons::target_size(ui)],
+            egui::Checkbox::new(&mut reduced, reduced_label),
+        )
+        .accessible_name("Reduce motion")
+        .on_hover_text("Reduce motion");
     if reduced_response.changed() {
         actions.reduced_motion = Some(reduced);
     }

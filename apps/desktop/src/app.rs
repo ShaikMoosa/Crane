@@ -704,7 +704,11 @@ impl CraneApp {
         // Reserve enough room for the separator, two 44-point actions, spacing,
         // and the reduced-motion checkbox. A 128-point footer left the final
         // preference below the viewport at the supported 560-point minimum.
-        let footer_height = 160.0;
+        let footer_height = if ui.available_height() <= 600.0 {
+            176.0
+        } else {
+            160.0
+        };
         let mutations_enabled = self.transfers.can_mutate();
         let content_size = egui::vec2(
             ui.available_width(),

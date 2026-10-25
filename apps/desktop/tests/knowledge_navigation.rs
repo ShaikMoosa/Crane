@@ -194,6 +194,60 @@ fn ambiguous_link_opens_chooser_and_navigates_to_choice() {
 }
 
 #[test]
+fn ambiguous_link_chooser_traps_tab_focus_inside_the_dialog() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "See [[Dupe]]!", 4),
+        note("d1", "Dupe", "first body", 3),
+        note("d2", "Dupe", "second body", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Preview Markdown").click();
+    settle(&mut harness);
+    harness.get_by_label("Open linked note: Dupe").click();
+    settle(&mut harness);
+
+    for _ in 0..12 {
+        harness.key_press(eframe::egui::Key::Tab);
+        harness.run_steps(2);
+        let choice_focused = harness
+            .query_all_by_label("Choose linked note: Dupe")
+            .any(|choice| choice.is_focused());
+        assert!(
+            harness.get_by_label("Close link chooser").is_focused()
+                || choice_focused
+                || harness.get_by_label("Cancel").is_focused(),
+            "Tab focus escaped the link chooser"
+        );
+    }
+}
+
+#[test]
+fn ambiguous_link_chooser_blocks_background_editor_actions() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "See [[Dupe]]!", 4),
+        note("d1", "Dupe", "first body", 3),
+        note("d2", "Dupe", "second body", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Preview Markdown").click();
+    settle(&mut harness);
+    harness.get_by_label("Open linked note: Dupe").click();
+    settle(&mut harness);
+
+    harness.get_by_label("Edit Markdown").click();
+    harness.run_steps(2);
+
+    harness.get_by_label("Edit Markdown");
+    assert!(harness.query_by_label("Note body").is_none());
+}
+
+#[test]
 fn unresolved_link_offers_create_through_save_gate() {
     let (app, committed) = app(vec![note("a", "Alpha", "See [[Brand New]]!", 3)]);
     let mut harness = Harness::builder()

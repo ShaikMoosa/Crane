@@ -120,8 +120,9 @@ pub fn show(
 
         let menu_icon =
             crate::icons::icon_for_text_button(ui, IconId::Ellipsis, ui.visuals().text_color());
+        let target = crate::icons::target_size(ui);
         let note_actions = ui
-            .add(egui::Button::image(menu_icon).min_size(egui::vec2(38.0, 38.0)))
+            .add(egui::Button::image(menu_icon).min_size(egui::vec2(target, target)))
             .accessible_name("Note actions")
             .on_hover_text("Note actions");
         note_actions.widget_info(|| {
@@ -286,6 +287,11 @@ fn show_body(
     }
 
     let body_size = ui.available_size();
+    let formatting_height = formatting
+        .as_ref()
+        .map(|_| crate::formatting::toolbar_height(ui, body_size.x) + ui.spacing().item_spacing.y)
+        .unwrap_or(0.0);
+    let body_height = (body_size.y - formatting_height).max(ui.spacing().interact_size.y);
     let body_id = editor_widget_id(note_id, "body");
     let revision = draft.current().revision;
     let mut layout_error = None;
@@ -301,16 +307,19 @@ fn show_body(
         ui.fonts_mut(|fonts| fonts.layout_job(job))
     };
     let body_response = ui
-        .add_enabled(
-            mutations_enabled,
-            egui::TextEdit::multiline(&mut draft.current_mut().body)
-                .id_salt(body_id)
-                .hint_text("Write in Markdown…")
-                .desired_rows(24)
-                .font(egui::TextStyle::Body)
-                .layouter(&mut layouter)
-                .desired_width(body_size.x),
-        )
+        .add_enabled_ui(mutations_enabled, |ui| {
+            ui.add_sized(
+                [body_size.x, body_height],
+                egui::TextEdit::multiline(&mut draft.current_mut().body)
+                    .id_salt(body_id)
+                    .hint_text("Write in Markdown…")
+                    .desired_rows(1)
+                    .font(egui::TextStyle::Body)
+                    .layouter(&mut layouter)
+                    .desired_width(body_size.x),
+            )
+        })
+        .inner
         .accessible_name("Note body");
     drop(layouter);
     if let Some(error) = layout_error {
@@ -384,13 +393,13 @@ fn show_body(
     }
 
     if let Some(format_view) = formatting.as_mut() {
+        let restore_body_focus = format_view.state.take_body_focus_request();
         let live_range = TextEditState::load(ui.ctx(), response_id)
             .and_then(|state| state.cursor.char_range())
             .map(|range| (range.primary.index.0, range.secondary.index.0));
         format_view
             .state
             .sync_active(&draft.current().body, live_range);
-        let link_was_open = format_view.state.link_open;
         if let Some(action) = crate::formatting::show(ui, format_view.state, mutations_enabled) {
             let selected = match live_range {
                 Some((a, b)) if a != b => (a, b),
@@ -405,7 +414,7 @@ fn show_body(
                 &body_response,
             );
         }
-        if link_was_open && !format_view.state.link_open {
+        if restore_body_focus {
             body_response.request_focus();
         }
         format_view.state.last_char_range = live_range;
