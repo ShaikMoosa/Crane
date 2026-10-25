@@ -1559,7 +1559,11 @@ impl CraneApp {
     }
 
     fn handle_shortcuts(&mut self, context: &egui::Context) {
-        if self.transfers.restore_dialog().is_some() {
+        if self.transfers.restore_dialog().is_some()
+            || self.quick_open.open
+            || self.chooser.open
+            || self.formatting.link_open
+        {
             return;
         }
         let (new_note, save, preview, search, escape, quick_open) = context.input(|input| {
@@ -1603,9 +1607,9 @@ impl CraneApp {
         }
     }
 
-    /// Central Escape stack: completion, Quick Open, and the chooser consume
-    /// their own Escape during rendering, so reaching here means dismissing
-    /// the floating inspector, then focus mode, then single-pane back.
+    /// Central Escape stack: completion and transient modals consume their own
+    /// Escape during rendering, so reaching here means dismissing the floating
+    /// inspector, then focus mode, then single-pane back.
     fn dismiss_top_for_escape(&mut self) {
         if self.completion.popup_visible() || self.quick_open.open || self.chooser.open {
             return;

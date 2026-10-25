@@ -248,6 +248,30 @@ fn ambiguous_link_chooser_blocks_background_editor_actions() {
 }
 
 #[test]
+fn ambiguous_link_chooser_blocks_global_preview_shortcut() {
+    let (app, _) = app(vec![
+        note("a", "Alpha", "See [[Dupe]]!", 4),
+        note("d1", "Dupe", "first body", 3),
+        note("d2", "Dupe", "second body", 2),
+    ]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Preview Markdown").click();
+    settle(&mut harness);
+    harness.get_by_label("Open linked note: Dupe").click();
+    settle(&mut harness);
+
+    harness.key_press_modifiers(eframe::egui::Modifiers::CTRL, eframe::egui::Key::P);
+    harness.run_steps(2);
+
+    harness.get_by_label("Edit Markdown");
+    assert!(harness.query_by_label("Preview Markdown").is_none());
+    harness.get_by_role_and_label(eframe::egui::accesskit::Role::Dialog, "Choose link target");
+}
+
+#[test]
 fn unresolved_link_offers_create_through_save_gate() {
     let (app, committed) = app(vec![note("a", "Alpha", "See [[Brand New]]!", 3)]);
     let mut harness = Harness::builder()

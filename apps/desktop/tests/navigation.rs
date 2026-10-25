@@ -711,15 +711,32 @@ fn minimum_window_keeps_formatting_controls_inside_the_editor_viewport() {
     let body = harness
         .get_by_role_and_label(Role::MultilineTextInput, "Note body")
         .rect();
-    let bold = harness.get_by_role_and_label(Role::Button, "Bold").rect();
-    assert!(
-        bold.max.y <= 560.0,
-        "formatting controls were outside the minimum viewport: {bold:?}"
-    );
-    assert!(
-        body.max.y <= bold.min.y,
-        "editor body overlapped the formatting controls: {body:?} vs {bold:?}"
-    );
+    for label in [
+        "Heading",
+        "Task list",
+        "Bulleted list",
+        "Numbered list",
+        "Quote",
+        "Bold",
+        "Italic",
+        "Inline code",
+        "Code block",
+        "Insert link",
+    ] {
+        let control = harness.get_by_role_and_label(Role::Button, label).rect();
+        assert!(
+            control.max.y <= 560.0,
+            "{label} was outside the minimum viewport: {control:?}"
+        );
+        assert!(
+            control.width() >= 40.0 && control.height() >= 40.0,
+            "{label} lost its minimum target: {control:?}"
+        );
+        assert!(
+            body.max.y <= control.min.y,
+            "editor body overlapped {label}: {body:?} vs {control:?}"
+        );
+    }
 }
 
 #[test]

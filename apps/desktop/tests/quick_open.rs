@@ -117,6 +117,33 @@ fn quick_open_blocks_background_navigation() {
 }
 
 #[test]
+fn quick_open_blocks_global_application_shortcuts() {
+    let (app, committed) = app(vec![note("a", "Alpha", "first", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    open_overlay(&mut harness);
+
+    for key in [
+        eframe::egui::Key::N,
+        eframe::egui::Key::S,
+        eframe::egui::Key::P,
+        eframe::egui::Key::F,
+        eframe::egui::Key::O,
+    ] {
+        harness.key_press_modifiers(eframe::egui::Modifiers::CTRL, key);
+        harness.run_steps(2);
+        harness.get_by_role_and_label(Role::TextInput, "Quick Open");
+    }
+
+    assert_eq!(harness.state().selected_note_id(), Some("a"));
+    assert_eq!(committed.lock().unwrap().notes.len(), 1);
+    harness.get_by_label("Preview Markdown");
+    assert!(harness.query_by_label("Edit Markdown").is_none());
+}
+
+#[test]
 fn quick_open_visible_control_and_archived_toggle() {
     let (app, _) = app(vec![
         note("a", "Alpha", "first", 3),

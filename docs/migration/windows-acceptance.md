@@ -277,11 +277,14 @@ Each now has a focused regression and a fresh full-workspace verification result
   native `TextEdit`; the 720-by-560 harness asserts the body does not overlap the bar and
   every formatting target remains inside the viewport;
 - Markdown span composition now uses a start-ordered sweep plus priority heap rather
-  than scanning every candidate for every boundary; a 2,000-candidate adversarial test
-  bounds heap operations and completes in approximately 0.01 seconds;
+  than scanning every candidate for every boundary; code-block containment uses binary
+  search over ordered fenced ranges. A 2,000-candidate compose test and a public-path
+  512-fence adversarial test bound both stages and complete in approximately 0.02 seconds;
 - Quick Open, the ambiguous wiki-link chooser, and link insertion now use `egui::Modal`;
   tests cycle Tab within each dialog and prove attempted background activation does not
-  reach navigation or editor controls; and
+  reach navigation or editor controls. Application-level Ctrl+N/S/P/F/O shortcuts are
+  gated while a transient modal is active, and Escape closes the link dialog without
+  dismissing the inspector beneath it; and
 - transfer-disabled collection and tag destinations no longer emit navigation intents.
   The delayed-import harness clicks a disabled destination and verifies the active view
   remains unchanged.
@@ -303,9 +306,9 @@ Fresh verification on 2026-10-25 passed:
 The rebuilt unsigned artifacts are:
 
 - `crane.exe`: 15,141,888 bytes, SHA-256
-  `3E1A077A3FF271900FB7FC67BD68F2A2D41D082927C5399653E238C85E73E140`;
-- `Crane_0.3.0_x64-setup.exe`: 4,410,686 bytes, SHA-256
-  `782B2718EB1DDE0A8710DFDDABF80AD360E7EC7E599575D54B1F261298865874`.
+  `D0D841858FCB0DB5B1EB37E69897D61F561AAD9E69A652922DF379F3CD18815E`;
+- `Crane_0.3.0_x64-setup.exe`: 4,408,511 bytes, SHA-256
+  `C3938FA46DD487CD6DDF641431B86F5FA6EF423DEE4DB02219306F584206D736`.
 
 A new physical screenshot pass was attempted after this rebuild, but the Windows UI
 automation runtime failed before app attachment with `failed to write kernel assets: The

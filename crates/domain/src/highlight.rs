@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(test)]
 static COMPOSE_CANDIDATE_CHECKS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static CODE_BLOCK_LOOKUP_PROBES: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MarkdownSpan {
@@ -191,6 +193,27 @@ mod tests {
         assert!(
             checks <= 12_000,
             "compose performed {checks} candidate checks for a 2,000-candidate document"
+        );
+    }
+
+    #[test]
+    fn markup_heavy_highlighting_does_not_scan_every_code_block_per_lookup() {
+        let mut source = String::new();
+        for index in 0..512 {
+            source.push_str("```\ncode ` [[hidden\n```\n");
+            source.push_str(&format!("plain {index} `ok` [[open\n"));
+        }
+
+        CODE_BLOCK_LOOKUP_PROBES.store(0, Ordering::Relaxed);
+        let spans = highlight_markdown(&source);
+        let probes = CODE_BLOCK_LOOKUP_PROBES.load(Ordering::Relaxed);
+
+        assert_eq!(spans.first().unwrap().byte_range.start, 0);
+        assert_eq!(spans.last().unwrap().byte_range.end, source.len());
+        assert!(
+            probes <= source.len() * 16,
+            "highlighting performed {probes} code-block probes for {} source bytes",
+            source.len()
         );
     }
 }
@@ -674,9 +697,20 @@ fn scan_incomplete_markers(
 }
 
 fn containing_range(ranges: &[Range<usize>], position: usize) -> Option<&Range<usize>> {
-    ranges
-        .iter()
-        .find(|range| position >= range.start && position < range.end)
+    let mut low = 0usize;
+    let mut high = ranges.len();
+    while low < high {
+        let middle = low + (high - low) / 2;
+        #[cfg(test)]
+        CODE_BLOCK_LOOKUP_PROBES.fetch_add(1, Ordering::Relaxed);
+        if ranges[middle].start <= position {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    let candidate = ranges.get(low.checked_sub(1)?)?;
+    (position < candidate.end).then_some(candidate)
 }
 
 fn is_escaped(source: &str, position: usize) -> bool {

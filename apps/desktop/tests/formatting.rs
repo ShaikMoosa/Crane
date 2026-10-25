@@ -134,6 +134,27 @@ fn link_dialog_blocks_background_editor_actions() {
 }
 
 #[test]
+fn link_dialog_escape_does_not_dismiss_the_background_inspector() {
+    let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
+    let mut harness = Harness::builder()
+        .with_size([1240.0, 780.0])
+        .build_ui_state(|ui, app| app.show(ui), app);
+    settle(&mut harness);
+    harness.get_by_label("Note information").click();
+    harness.run_steps(4);
+    harness.get_by_label("Statistics");
+    harness.get_by_label("Insert link").click();
+    harness.run_steps(2);
+
+    harness.key_press(eframe::egui::Key::Escape);
+    harness.run_steps(3);
+
+    assert!(harness.query_by_label("Link URL").is_none());
+    harness.get_by_label("Statistics");
+    harness.get_by_label("Close inspector");
+}
+
+#[test]
 fn formatting_undo_restores_body() {
     let (app, _) = app(vec![note("a", "Alpha", "hello", 3)]);
     let mut harness = Harness::builder()
